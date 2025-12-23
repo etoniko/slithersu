@@ -113,6 +113,7 @@ canvas.addEventListener('wheel', e => {
 
 function sendInput() {
   if (!myId || !ws.readyState) return;
+  if (!snakes[myId]) return;
   const angle = Math.atan2(mouseY, mouseX);
   ws.send(JSON.stringify({ type: 'input', angle, boosting }));
 }
