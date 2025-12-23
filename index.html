@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Slither - тестовое состояние</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { margin:0; background:#0a0a0a; overflow:hidden; font-family:Arial; color:white; }
+    canvas { display:block; cursor:crosshair; }
+    #leaderboard {
+      position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.8); padding:15px; border-radius:10px;
+      min-width:200px; max-height:300px; overflow-y:auto; font-size:14px;
+    }
+    #leaderboard h3 { margin:0 0 10px; text-align:center; }
+    #leaderboard div { display:flex; justify-content:space-between; margin:5px 0; gap:2px;flex-direction: column;}
+    #minimap {
+      position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.8); border-radius:5px; padding:5px;
+    }
+    #minimap canvas { border:1px solid #333; border-radius:3px; }
+    #name-input { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.9); padding:20px; border-radius:10px; display:none; }
+    input { background:#333; color:white; border:1px solid #555; padding:10px; border-radius:5px; width:200px; }
+    button { background:#4a4a4a; color:white; border:1px solid #666; padding:10px 20px; border-radius:5px; cursor:pointer; margin-left:10px; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="leaderboard">
+    <h3>Leaderboard</h3>
+    <div id="lb-list"></div>
+  </div>
+  <div id="minimap">
+    <canvas id="minimap-canvas" width="200" height="200"></canvas>
+    <div style="text-align:center; font-size:12px;">Minimap</div>
+  </div>
+  <div id="name-input">
+    <input id="name-field" placeholder="Enter your name" maxlength="15">
+    <button onclick="setName()">Play</button>
+  </div>
+  <script>
+document.addEventListener('keydown', function (event) {
+  if (event.key === 'Escape') {
+    const menu = document.getElementById('name-input');
+
+    if (menu.style.display === 'none') {
+      menu.style.display = 'block';
+    } else {
+      menu.style.display = 'none';
+    }
+  }
+});
+</script>
+
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const minimapCanvas = document.getElementById('minimap-canvas');
+const minimapCtx = minimapCanvas.getContext('2d');
+const lbList = document.getElementById('lb-list');
+const nameInput = document.getElementById('name-input');
+const nameField = document.getElementById('name-field');
+
+let ws = new WebSocket('wss://ffa.agar.su:6009');
+let myId = null;
+let mapSize = 20000;
+let snakes = {};
+let foods = [];
+let leaderboard = [];
+
+let mouseX = 0, mouseY = 0;
+let boosting = false;
+let zoom = 0.8;
+let myHead = {x:0,y:0};
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Input
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left - canvas.width / 2;
+  mouseY = e.clientY - rect.top - canvas.height / 2;
+  sendInput();
+});
+
+// Space boost
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space' && document.activeElement !== nameField) {
+    e.preventDefault();
+    boosting = true;
+    sendInput();
+  }
+});
+
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space') {
+    boosting = false;
+    sendInput();
+  }
+});
+
+// Zoom
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoom *= e.deltaY > 0 ? 0.9 : 1.1;
+  zoom = Math.max(0.05, Math.min(5, zoom));
+});
+
+function sendInput() {
+  if (!myId || !ws.readyState) return;
+  const angle = Math.atan2(mouseY, mouseX);
+  ws.send(JSON.stringify({ type: 'input', angle, boosting }));
+}
+
+ws.onopen = () => console.log('Connected!');
+ws.onmessage = (msg) => {
+  const data = JSON.parse(msg.data);
+  if (data.type === 'init') {
+    myId = data.id;
+    mapSize = data.mapSize;
+    nameInput.style.display = 'block';
+    document.getElementById('name-field').focus();
+  } else if (data.type === 'state') {
+    snakes = data.snakes;
+    foods = data.foods;
+    leaderboard = data.leaderboard;
+    updateLeaderboard();
+    if (myId && snakes[myId]) myHead = snakes[myId].parts[0];
+  }
+};
+
+function setName() {
+  const name = nameField.value.trim() || 'Anon';
+  ws.send(JSON.stringify({ type: 'name', name }));
+  nameInput.style.display = 'none';
+}
+
+function updateLeaderboard() {
+  lbList.innerHTML = '';
+  leaderboard.forEach((player, i) => {
+    const div = document.createElement('div');
+    div.innerHTML = `<span>#${i+1} ${player.name} ${player.score}</span>`;
+    div.style.color = player.color;
+    lbList.appendChild(div);
+  });
+}
+
+function drawMain() {
+  const w = canvas.width;
+  const h = canvas.height;
+
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0, 0, w, h);
+
+  if (!myId || !snakes[myId]) {
+    requestAnimationFrame(drawMain);
+    return;
+  }
+
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-myHead.x, -myHead.y);
+
+  // Еда (Agar.io стиль - точки)
+  foods.forEach(food => {
+    ctx.fillStyle = food.color;
+    ctx.beginPath();
+    ctx.arc(food.x, food.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Змейки
+  for (let id in snakes) {
+    const snake = snakes[id];
+    if (snake.parts.length === 0) continue;
+
+    // Тело (плавная линия)
+    ctx.strokeStyle = snake.color;
+    ctx.lineWidth = 18 / zoom;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    snake.parts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+
+    // Градиент хвоста (опционально)
+    const grad = ctx.createLinearGradient(snake.parts[0].x, snake.parts[0].y, snake.parts[snake.parts.length-1].x, snake.parts[snake.parts.length-1].y);
+    grad.addColorStop(0, snake.color);
+    grad.addColorStop(1, '#000');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 12 / zoom;
+    ctx.beginPath();
+    snake.parts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+
+    // Голова + глаза
+    const head = snake.parts[0];
+    ctx.fillStyle = snake.color;
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Глаза
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    const eyeOffset = 8;
+    ctx.arc(head.x + Math.cos(snake.angle - 0.4) * eyeOffset, head.y + Math.sin(snake.angle - 0.4) * eyeOffset, 4, 0, Math.PI * 2);
+    ctx.arc(head.x + Math.cos(snake.angle + 0.4) * eyeOffset, head.y + Math.sin(snake.angle + 0.4) * eyeOffset, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'black';
+    ctx.beginPath();
+    ctx.arc(head.x + Math.cos(snake.angle - 0.4) * eyeOffset, head.y + Math.sin(snake.angle - 0.4) * eyeOffset, 2, 0, Math.PI * 2);
+    ctx.arc(head.x + Math.cos(snake.angle + 0.4) * eyeOffset, head.y + Math.sin(snake.angle + 0.4) * eyeOffset, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Никнейм
+    ctx.fillStyle = 'white';
+    ctx.font = `bold ${20 / zoom}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(snake.name, head.x, head.y - 40 / zoom);
+
+    // Boost индикатор (для своей)
+    if (id === myId && snake.boostCharge) {
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillRect(head.x - 30 / zoom, head.y + 20 / zoom, 60 / zoom, 8 / zoom);
+      ctx.fillStyle = '#0f0';
+      ctx.fillRect(head.x - 30 / zoom, head.y + 20 / zoom, (snake.boostCharge / 200) * 60 / zoom, 8 / zoom);
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawMinimap() {
+  const mcw = 200, mch = 200;
+  minimapCtx.fillStyle = '#001122';
+  minimapCtx.fillRect(0, 0, mcw, mch);
+
+  const scale = mcw / mapSize;
+
+  // Игроки (точки)
+  for (let id in snakes) {
+    const head = snakes[id].parts[0];
+    minimapCtx.fillStyle = id === myId ? '#fff' : snakes[id].color;
+    minimapCtx.beginPath();
+    minimapCtx.arc(head.x * scale, head.y * scale, id === myId ? 4 : 2, 0, Math.PI * 2);
+    minimapCtx.fill();
+  }
+
+  // My view rect
+  if (myId && snakes[myId]) {
+    const head = snakes[myHead];
+    const vw = canvas.width / zoom / mapSize * mcw;
+    const vh = canvas.height / zoom / mapSize * mch;
+    minimapCtx.strokeStyle = '#fff';
+    minimapCtx.lineWidth = 2;
+    minimapCtx.strokeRect(
+      (myHead.x - canvas.width / (2 * zoom)) * scale,
+      (myHead.y - canvas.height / (2 * zoom)) * scale,
+      vw, vh
+    );
+  }
+}
+
+function loop() {
+  drawMain();
+  drawMinimap();
+  requestAnimationFrame(loop);
+}
+loop();
+
+setInterval(sendInput, 40); // ~25Hz input
+</script>
+</body>
+</html>
