@@ -195,137 +195,134 @@ foods.forEach(food => {
 
 
   // Змейки
-for (let id in snakes) {
-  const snake = snakes[id];
-  if (!snake.parts || snake.parts.length === 0) continue;
+  for (let id in snakes) {
+    const snake = snakes[id];
+    if (!snake.parts || snake.parts.length === 0) continue;
 
-  // ===== ТЕЛО (с защитой от wrap-багов) =====
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+    const head = snake.parts[0];
+    const tail = snake.parts[snake.parts.length - 1];
 
-  // --- Основная линия ---
-  ctx.strokeStyle = snake.color;
-  ctx.lineWidth = 20;
-  ctx.beginPath();
+    // Используем diameter с сервера (он уже рассчитан как BASE_DIAMETER + DIAMETER_SCALING * (length - 1))
+    const diameter = snake.diameter || 20; // на случай, если по какой-то причине не пришло
 
-  for (let i = 0; i < snake.parts.length; i++) {
-    const p = snake.parts[i];
+    // Динамические размеры
+    const bodyWidth = Math.max(10, diameter * 1.0);     // основная линия тела
+    const fadeWidth = Math.max(8, diameter * 0.85);     // градиент чуть тоньше
+    const headRadius = Math.max(10, diameter / 2);      // радиус головы = половина диаметра
+    const eyeOffset = headRadius * 0.65;                // глаза ближе к краю большой головы
+    const eyeSize = Math.max(3, headRadius * 0.35);
+    const pupilSize = Math.max(1.5, headRadius * 0.15);
 
-    if (i === 0) {
-      ctx.moveTo(p.x, p.y);
-      continue;
+    // ===== ТЕЛО (с защитой от wrap-багов) =====
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // --- Основная линия тела ---
+    ctx.strokeStyle = snake.color;
+    ctx.lineWidth = bodyWidth;
+    ctx.beginPath();
+    for (let i = 0; i < snake.parts.length; i++) {
+      const p = snake.parts[i];
+      if (i === 0) {
+        ctx.moveTo(p.x, p.y);
+        continue;
+      }
+      const prev = snake.parts[i - 1];
+      const dx = Math.abs(p.x - prev.x);
+      const dy = Math.abs(p.y - prev.y);
+      if (dx > mapSize / 2 || dy > mapSize / 2) {
+        ctx.moveTo(p.x, p.y);
+      } else {
+        ctx.lineTo(p.x, p.y);
+      }
     }
+    ctx.stroke();
 
-    const prev = snake.parts[i - 1];
-    const dx = Math.abs(p.x - prev.x);
-    const dy = Math.abs(p.y - prev.y);
-
-    // ❗ разрыв линии при зеркальном переходе
-    if (dx > mapSize / 2 || dy > mapSize / 2) {
-      ctx.moveTo(p.x, p.y);
-    } else {
-      ctx.lineTo(p.x, p.y);
-    }
-  }
-  ctx.stroke();
-
-  // --- Градиент хвоста ---
-  const headPart = snake.parts[0];
-  const tailPart = snake.parts[snake.parts.length - 1];
-  const grad = ctx.createLinearGradient(
-    headPart.x, headPart.y,
-    tailPart.x, tailPart.y
-  );
-  grad.addColorStop(0, snake.color);
-  grad.addColorStop(1, '#000');
-
-  ctx.strokeStyle = grad;
-  ctx.lineWidth = 18;
-  ctx.beginPath();
-
-  for (let i = 0; i < snake.parts.length; i++) {
-    const p = snake.parts[i];
-
-    if (i === 0) {
-      ctx.moveTo(p.x, p.y);
-      continue;
-    }
-
-    const prev = snake.parts[i - 1];
-    const dx = Math.abs(p.x - prev.x);
-    const dy = Math.abs(p.y - prev.y);
-
-    if (dx > mapSize / 2 || dy > mapSize / 2) {
-      ctx.moveTo(p.x, p.y);
-    } else {
-      ctx.lineTo(p.x, p.y);
-    }
-  }
-  ctx.stroke();
-
-  // ===== ГОЛОВА =====
-  const head = snake.parts[0];
-  ctx.fillStyle = snake.color;
-  ctx.beginPath();
-  ctx.arc(head.x, head.y, 12, 0, Math.PI * 2);
-  ctx.fill();
-
-  // ===== ГЛАЗА =====
-  const eyeOffset = 8;
-  ctx.fillStyle = 'white';
-  ctx.beginPath();
-  ctx.arc(
-    head.x + Math.cos(snake.angle - 0.4) * eyeOffset,
-    head.y + Math.sin(snake.angle - 0.4) * eyeOffset,
-    4, 0, Math.PI * 2
-  );
-  ctx.arc(
-    head.x + Math.cos(snake.angle + 0.4) * eyeOffset,
-    head.y + Math.sin(snake.angle + 0.4) * eyeOffset,
-    4, 0, Math.PI * 2
-  );
-  ctx.fill();
-
-  ctx.fillStyle = 'black';
-  ctx.beginPath();
-  ctx.arc(
-    head.x + Math.cos(snake.angle - 0.4) * eyeOffset,
-    head.y + Math.sin(snake.angle - 0.4) * eyeOffset,
-    2, 0, Math.PI * 2
-  );
-  ctx.arc(
-    head.x + Math.cos(snake.angle + 0.4) * eyeOffset,
-    head.y + Math.sin(snake.angle + 0.4) * eyeOffset,
-    2, 0, Math.PI * 2
-  );
-  ctx.fill();
-
-  // ===== НИК =====
-  ctx.fillStyle = 'white';
-  ctx.font = `bold ${20 / zoom}px Arial`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(snake.name, head.x, head.y - 40 / zoom);
-
-  // ===== BOOST ИНДИКАТОР =====
-  if (id === myId && snake.boostCharge) {
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.fillRect(
-      head.x - 30 / zoom,
-      head.y + 20 / zoom,
-      60 / zoom,
-      8 / zoom
+    // --- Градиент хвоста (плавное затемнение к чёрному) ---
+    const grad = ctx.createLinearGradient(
+      head.x, head.y,
+      tail.x, tail.y
     );
+    grad.addColorStop(0, snake.color);
+    grad.addColorStop(1, '#000');
 
-    ctx.fillStyle = '#0f0';
-    ctx.fillRect(
-      head.x - 30 / zoom,
-      head.y + 20 / zoom,
-      (snake.boostCharge / 200) * 60 / zoom,
-      8 / zoom
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = fadeWidth;
+    ctx.beginPath();
+    for (let i = 0; i < snake.parts.length; i++) {
+      const p = snake.parts[i];
+      if (i === 0) {
+        ctx.moveTo(p.x, p.y);
+        continue;
+      }
+      const prev = snake.parts[i - 1];
+      const dx = Math.abs(p.x - prev.x);
+      const dy = Math.abs(p.y - prev.y);
+      if (dx > mapSize / 2 || dy > mapSize / 2) {
+        ctx.moveTo(p.x, p.y);
+      } else {
+        ctx.lineTo(p.x, p.y);
+      }
+    }
+    ctx.stroke();
+
+    // ===== ГОЛОВА =====
+    ctx.fillStyle = snake.color;
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, headRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ===== ГЛАЗА =====
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.arc(
+      head.x + Math.cos(snake.angle - 0.4) * eyeOffset,
+      head.y + Math.sin(snake.angle - 0.4) * eyeOffset,
+      eyeSize, 0, Math.PI * 2
     );
+    ctx.arc(
+      head.x + Math.cos(snake.angle + 0.4) * eyeOffset,
+      head.y + Math.sin(snake.angle + 0.4) * eyeOffset,
+      eyeSize, 0, Math.PI * 2
+    );
+    ctx.fill();
+
+    // Зрачки
+    ctx.fillStyle = 'black';
+    ctx.beginPath();
+    ctx.arc(
+      head.x + Math.cos(snake.angle - 0.4) * eyeOffset,
+      head.y + Math.sin(snake.angle - 0.4) * eyeOffset,
+      pupilSize, 0, Math.PI * 2
+    );
+    ctx.arc(
+      head.x + Math.cos(snake.angle + 0.4) * eyeOffset,
+      head.y + Math.sin(snake.angle + 0.4) * eyeOffset,
+      pupilSize, 0, Math.PI * 2
+    );
+    ctx.fill();
+
+    // ===== НИК =====
+    ctx.fillStyle = 'white';
+    ctx.font = `bold ${Math.max(12, 20 / zoom)}px Arial`; // минимальный размер, чтобы не исчезал при зуме
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(snake.name, head.x, head.y - (headRadius + 15) / zoom);
+
+    // ===== BOOST ИНДИКАТОР (только для своей змеи) =====
+    if (id === myId && snake.boostCharge !== undefined) {
+      const barWidth = 80 / zoom;
+      const barHeight = 10 / zoom;
+      const barX = head.x - barWidth / 2;
+      const barY = head.y + headRadius / zoom + 15 / zoom;
+
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillRect(barX, barY, barWidth, barHeight);
+
+      ctx.fillStyle = '#0f0';
+      ctx.fillRect(barX, barY, (snake.boostCharge / 200) * barWidth, barHeight);
+    }
   }
-}
 
 
   ctx.restore();
