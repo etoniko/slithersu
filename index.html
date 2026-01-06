@@ -128,9 +128,6 @@ ws.onmessage = (msg) => {
     document.getElementById('name-field').focus();
 } else if (data.type === 'state') {
   snakes = data.snakes;
-    if (data.boostCharge !== undefined) {
-    window.myBoostCharge = data.boostCharge;
-  }
   foods = data.foods;
   leaderboard = data.leaderboard;
   updateLeaderboard();
@@ -266,49 +263,69 @@ for (let id in snakes) {
   }
   ctx.stroke();
 
- // === ГОЛОВА ===
-    ctx.fillStyle = snake.color;
-    ctx.beginPath();
-    ctx.arc(head.x, head.y, headRadius, 0, Math.PI * 2);
-    ctx.fill();
+  // ===== ГОЛОВА =====
+  const head = snake.parts[0];
+  ctx.fillStyle = snake.color;
+  ctx.beginPath();
+  ctx.arc(head.x, head.y, 12, 0, Math.PI * 2);
+  ctx.fill();
 
-    // === ГЛАЗА (масштабируемые и всегда видимые) ===
-    if (snake.angle !== undefined) {
-      const eyeOffset = headRadius * 0.65;
-      const eyeSize = Math.max(3, headRadius * 0.35);
-      const pupilSize = Math.max(1.5, headRadius * 0.15);
+  // ===== ГЛАЗА =====
+  const eyeOffset = 8;
+  ctx.fillStyle = 'white';
+  ctx.beginPath();
+  ctx.arc(
+    head.x + Math.cos(snake.angle - 0.4) * eyeOffset,
+    head.y + Math.sin(snake.angle - 0.4) * eyeOffset,
+    4, 0, Math.PI * 2
+  );
+  ctx.arc(
+    head.x + Math.cos(snake.angle + 0.4) * eyeOffset,
+    head.y + Math.sin(snake.angle + 0.4) * eyeOffset,
+    4, 0, Math.PI * 2
+  );
+  ctx.fill();
 
-      ctx.fillStyle = 'white';
-      ctx.beginPath();
-      ctx.arc(head.x + Math.cos(snake.angle - 0.4) * eyeOffset, head.y + Math.sin(snake.angle - 0.4) * eyeOffset, eyeSize, 0, Math.PI * 2);
-      ctx.arc(head.x + Math.cos(snake.angle + 0.4) * eyeOffset, head.y + Math.sin(snake.angle + 0.4) * eyeOffset, eyeSize, 0, Math.PI * 2);
-      ctx.fill();
+  ctx.fillStyle = 'black';
+  ctx.beginPath();
+  ctx.arc(
+    head.x + Math.cos(snake.angle - 0.4) * eyeOffset,
+    head.y + Math.sin(snake.angle - 0.4) * eyeOffset,
+    2, 0, Math.PI * 2
+  );
+  ctx.arc(
+    head.x + Math.cos(snake.angle + 0.4) * eyeOffset,
+    head.y + Math.sin(snake.angle + 0.4) * eyeOffset,
+    2, 0, Math.PI * 2
+  );
+  ctx.fill();
 
-      ctx.fillStyle = 'black';
-      ctx.beginPath();
-      ctx.arc(head.x + Math.cos(snake.angle - 0.4) * eyeOffset, head.y + Math.sin(snake.angle - 0.4) * eyeOffset, pupilSize, 0, Math.PI * 2);
-      ctx.arc(head.x + Math.cos(snake.angle + 0.4) * eyeOffset, head.y + Math.sin(snake.angle + 0.4) * eyeOffset, pupilSize, 0, Math.PI * 2);
-      ctx.fill();
-    }
+  // ===== НИК =====
+  ctx.fillStyle = 'white';
+  ctx.font = `bold ${20 / zoom}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(snake.name, head.x, head.y - 40 / zoom);
 
-// === НИК ===
-    ctx.fillStyle = 'white';
-    ctx.font = `bold ${Math.max(12, 20 / zoom)}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(snake.name, head.x, head.y - (headRadius + 10) / zoom);
+  // ===== BOOST ИНДИКАТОР =====
+  if (id === myId && snake.boostCharge) {
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(
+      head.x - 30 / zoom,
+      head.y + 20 / zoom,
+      60 / zoom,
+      8 / zoom
+    );
 
-    // === BOOST ИНДИКАТОР (исправленный — берём из корня пакета) ===
-    // Сервер присылает boostCharge отдельно, поэтому сохраняем его глобально
-    if (id === myId && window.myBoostCharge > 0) {
-      const barW = 60 / zoom;
-      const barH = 8 / zoom;
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillRect(head.x - barW / 2, head.y + headRadius / zoom + 10 / zoom, barW, barH);
-      ctx.fillStyle = '#0f0';
-      ctx.fillRect(head.x - barW / 2, head.y + headRadius / zoom + 10 / zoom, (window.myBoostCharge / 200) * barW, barH);
-    }
+    ctx.fillStyle = '#0f0';
+    ctx.fillRect(
+      head.x - 30 / zoom,
+      head.y + 20 / zoom,
+      (snake.boostCharge / 200) * 60 / zoom,
+      8 / zoom
+    );
   }
+}
 
 
   ctx.restore();
