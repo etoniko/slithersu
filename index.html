@@ -186,12 +186,13 @@ ctx.strokeRect(0, 0, mapSize, mapSize);
 // =================================
 
   // Еда (Agar.io стиль - точки)
-  foods.forEach(food => {
-    ctx.fillStyle = food.color;
-    ctx.beginPath();
-    ctx.arc(food.x, food.y, 5, 0, Math.PI * 2);
-    ctx.fill();
-  });
+foods.forEach(food => {
+  ctx.fillStyle = food.color;
+  ctx.beginPath();
+  ctx.arc(food.x, food.y, food.size, 0, Math.PI * 2);  // Используем food.size для радиуса
+  ctx.fill();
+});
+
 
   // Змейки
 for (let id in snakes) {
