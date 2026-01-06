@@ -302,7 +302,7 @@ for (let id in snakes) {
 
   // ===== НИК =====
   ctx.fillStyle = 'white';
-  ctx.font = `bold 20px Arial`;
+  ctx.font = `bold ${20 / zoom}px Arial`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(snake.name, head.x, head.y - 40 / zoom);
