@@ -310,17 +310,34 @@ foods.forEach(food => {
     ctx.fillText(snake.name, head.x, head.y - (headRadius + 15) / zoom);
 
     // ===== BOOST ИНДИКАТОР (только для своей змеи) =====
-    if (id === myId && snake.boostCharge !== undefined) {
-      const barWidth = 80 / zoom;
-      const barHeight = 10 / zoom;
-      const barX = head.x - barWidth / 2;
-      const barY = head.y + headRadius / zoom + 15 / zoom;
+    // ===== BOOST ИНДИКАТОР (только для своей змеи) — ФИКСИРОВАННЫЙ РАЗМЕР НА ЭКРАНЕ =====
+    if (id === myId && snake.boostCharge !== undefined && snake.boostCharge > 0) {
+      // Позиция относительно экрана (не мира!), чтобы всегда была видна
+      const screenX = canvas.width / 2;                    // центр экрана по X
+      const screenY = canvas.height - 100;                 // снизу экрана, с отступом
 
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillRect(barX, barY, barWidth, barHeight);
+      const barWidth = 200;
+      const barHeight = 20;
 
+      // Фон полоски
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(screenX - barWidth / 2, screenY, barWidth, barHeight);
+
+      // Заполнение зелёным
       ctx.fillStyle = '#0f0';
-      ctx.fillRect(barX, barY, (snake.boostCharge / 200) * barWidth, barHeight);
+      ctx.fillRect(screenX - barWidth / 2, screenY, (snake.boostCharge / 200) * barWidth, barHeight);
+
+      // Рамка
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(screenX - barWidth / 2, screenY, barWidth, barHeight);
+
+      // Текст (опционально)
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`Boost: ${Math.round(snake.boostCharge)}/200`, screenX, screenY + barHeight / 2);
     }
   }
 
