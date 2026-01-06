@@ -304,17 +304,17 @@ foods.forEach(food => {
 
     // ===== НИК =====
     ctx.fillStyle = 'white';
-    ctx.font = `bold ${Math.max(12, 20 / zoom)}px Arial`; // минимальный размер, чтобы не исчезал при зуме
+    ctx.font = `bold 20px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(snake.name, head.x, head.y - (headRadius + 15) / zoom);
+    ctx.fillText(snake.name, head.x, head.y - (headRadius + 15));
 
     // ===== BOOST ИНДИКАТОР (только для своей змеи) =====
     if (id === myId && snake.boostCharge !== undefined) {
-      const barWidth = 80 / zoom;
-      const barHeight = 10 / zoom;
+      const barWidth = 80;
+      const barHeight = 10;
       const barX = head.x - barWidth / 2;
-      const barY = head.y + headRadius / zoom + 15 / zoom;
+      const barY = head.y + headRadius + 15;
 
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.fillRect(barX, barY, barWidth, barHeight);
