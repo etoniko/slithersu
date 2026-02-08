@@ -180,20 +180,19 @@ function drawMain() {
   ctx.scale(zoom, zoom);
   ctx.translate(-myHead.x, -myHead.y);
   
-// ===== КРАСНАЯ ГРАНИЦА КАРТЫ =====
-ctx.strokeStyle = 'red';
-ctx.lineWidth = 8; // толщина не меняется при зуме
-ctx.strokeRect(0, 0, mapSize, mapSize);
-// =================================
+  // ===== КРАСНАЯ ГРАНИЦА КАРТЫ =====
+  ctx.strokeStyle = 'red';
+  ctx.lineWidth = 8; 
+  ctx.strokeRect(0, 0, mapSize, mapSize);
+  // =================================
 
-  // Еда (Agar.io стиль - точки)
-foods.forEach(food => {
-  ctx.fillStyle = food.color;
-  ctx.beginPath();
-  ctx.arc(food.x, food.y, food.size, 0, Math.PI * 2);  // Используем food.size для радиуса
-  ctx.fill();
-});
-
+  // Еда
+  foods.forEach(food => {
+    ctx.fillStyle = food.color;
+    ctx.beginPath();
+    ctx.arc(food.x, food.y, food.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
 
   // Змейки
   for (let id in snakes) {
@@ -201,24 +200,16 @@ foods.forEach(food => {
     if (!snake.parts || snake.parts.length === 0) continue;
 
     const head = snake.parts[0];
-    const tail = snake.parts[snake.parts.length - 1];
-
-    // Используем diameter с сервера (он уже рассчитан как BASE_DIAMETER + DIAMETER_SCALING * (length - 1))
-    const diameter = snake.diameter || 20; // на случай, если по какой-то причине не пришло
-
-    // Динамические размеры
-    const bodyWidth = Math.max(10, diameter * 1.0);     // основная линия тела
-    const fadeWidth = Math.max(8, diameter * 0.85);     // градиент чуть тоньше
-    const headRadius = Math.max(10, diameter / 2);      // радиус головы = половина диаметра
-    const eyeOffset = headRadius * 0.65;                // глаза ближе к краю большой головы
+    const diameter = snake.diameter || 20;
+    const bodyWidth = Math.max(10, diameter);
+    const headRadius = Math.max(10, diameter / 2);
+    const eyeOffset = headRadius * 0.65;
     const eyeSize = Math.max(3, headRadius * 0.35);
     const pupilSize = Math.max(1.5, headRadius * 0.15);
 
-    // ===== ТЕЛО (с защитой от wrap-багов) =====
+    // ===== ТЕЛО =====
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-
-    // --- Основная линия тела ---
     ctx.strokeStyle = snake.color;
     ctx.lineWidth = bodyWidth;
     ctx.beginPath();
@@ -226,43 +217,15 @@ foods.forEach(food => {
       const p = snake.parts[i];
       if (i === 0) {
         ctx.moveTo(p.x, p.y);
-        continue;
-      }
-      const prev = snake.parts[i - 1];
-      const dx = Math.abs(p.x - prev.x);
-      const dy = Math.abs(p.y - prev.y);
-      if (dx > mapSize / 2 || dy > mapSize / 2) {
-        ctx.moveTo(p.x, p.y);
       } else {
-        ctx.lineTo(p.x, p.y);
-      }
-    }
-    ctx.stroke();
-
-    // --- Градиент хвоста (плавное затемнение к чёрному) ---
-    const grad = ctx.createLinearGradient(
-      head.x, head.y,
-      tail.x, tail.y
-    );
-    grad.addColorStop(0, snake.color);
-    grad.addColorStop(1, '#000');
-
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = fadeWidth;
-    ctx.beginPath();
-    for (let i = 0; i < snake.parts.length; i++) {
-      const p = snake.parts[i];
-      if (i === 0) {
-        ctx.moveTo(p.x, p.y);
-        continue;
-      }
-      const prev = snake.parts[i - 1];
-      const dx = Math.abs(p.x - prev.x);
-      const dy = Math.abs(p.y - prev.y);
-      if (dx > mapSize / 2 || dy > mapSize / 2) {
-        ctx.moveTo(p.x, p.y);
-      } else {
-        ctx.lineTo(p.x, p.y);
+        const prev = snake.parts[i - 1];
+        const dx = Math.abs(p.x - prev.x);
+        const dy = Math.abs(p.y - prev.y);
+        if (dx > mapSize / 2 || dy > mapSize / 2) {
+          ctx.moveTo(p.x, p.y);
+        } else {
+          ctx.lineTo(p.x, p.y);
+        }
       }
     }
     ctx.stroke();
@@ -276,31 +239,22 @@ foods.forEach(food => {
     // ===== ГЛАЗА =====
     ctx.fillStyle = 'white';
     ctx.beginPath();
-    ctx.arc(
-      head.x + Math.cos(snake.angle - 0.4) * eyeOffset,
-      head.y + Math.sin(snake.angle - 0.4) * eyeOffset,
-      eyeSize, 0, Math.PI * 2
-    );
-    ctx.arc(
-      head.x + Math.cos(snake.angle + 0.4) * eyeOffset,
-      head.y + Math.sin(snake.angle + 0.4) * eyeOffset,
-      eyeSize, 0, Math.PI * 2
-    );
+    ctx.arc(head.x + Math.cos(snake.angle - 0.4) * eyeOffset,
+            head.y + Math.sin(snake.angle - 0.4) * eyeOffset,
+            eyeSize, 0, Math.PI * 2);
+    ctx.arc(head.x + Math.cos(snake.angle + 0.4) * eyeOffset,
+            head.y + Math.sin(snake.angle + 0.4) * eyeOffset,
+            eyeSize, 0, Math.PI * 2);
     ctx.fill();
 
-    // Зрачки
     ctx.fillStyle = 'black';
     ctx.beginPath();
-    ctx.arc(
-      head.x + Math.cos(snake.angle - 0.4) * eyeOffset,
-      head.y + Math.sin(snake.angle - 0.4) * eyeOffset,
-      pupilSize, 0, Math.PI * 2
-    );
-    ctx.arc(
-      head.x + Math.cos(snake.angle + 0.4) * eyeOffset,
-      head.y + Math.sin(snake.angle + 0.4) * eyeOffset,
-      pupilSize, 0, Math.PI * 2
-    );
+    ctx.arc(head.x + Math.cos(snake.angle - 0.4) * eyeOffset,
+            head.y + Math.sin(snake.angle - 0.4) * eyeOffset,
+            pupilSize, 0, Math.PI * 2);
+    ctx.arc(head.x + Math.cos(snake.angle + 0.4) * eyeOffset,
+            head.y + Math.sin(snake.angle + 0.4) * eyeOffset,
+            pupilSize, 0, Math.PI * 2);
     ctx.fill();
 
     // ===== НИК =====
@@ -310,7 +264,7 @@ foods.forEach(food => {
     ctx.textBaseline = 'middle';
     ctx.fillText(snake.name, head.x, head.y - (headRadius + 15));
 
-    // ===== BOOST ИНДИКАТОР (только для своей змеи) =====
+    // ===== BOOST ИНДИКАТОР =====
     if (id === myId && snake.boostCharge !== undefined) {
       const barWidth = 80;
       const barHeight = 10;
@@ -325,9 +279,9 @@ foods.forEach(food => {
     }
   }
 
-
   ctx.restore();
 }
+
 
 function drawMinimap() {
   const mcw = 200, mch = 200;
