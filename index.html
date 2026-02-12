@@ -15,7 +15,7 @@ canvas{background:#151515}
 class Network {
     constructor(game){
         this.game = game;
-        this.ws = new WebSocket("ws://localhost:3000");
+        this.ws = new WebSocket("ws://api.agar.su:6001");
         this.ws.binaryType = "arraybuffer";
         this.ws.onmessage = e => this.onMessage(e);
     }
