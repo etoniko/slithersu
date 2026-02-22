@@ -923,7 +923,7 @@
             sprite.anchor.set(.5)
             sprite.roundPixels = false;
 
-            this.core.app.stage.addChildAt(sprite, 0)
+            this.core.app.stage.addChild(sprite)
 
             const cell = new Cell(this.core, id, x, y, r, sprite, name, color);
             cellsByID.set(id, cell);
