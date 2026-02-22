@@ -1,291 +1,412 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-<meta charset="UTF-8">
-<title>Agar Lite</title>
-<link rel="icon" href="https://slither.su/icon.svg" type="image/svg+xml">
-<style>
-body{margin:0;overflow:hidden;background:#111}
-canvas{background:#151515}
-</style>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Eat cells smaller than you and don't get eaten by the bigger ones, as an MMO" />
+  <meta name="robots" content="index, follow">
+  <title>Slither.su</title>
+  <link rel="canonical" href="https://agar.su/beta/index.html">
+  <link id="favicon" rel="icon" type="image/png" href="https://agar.su/icon.svg" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Ц veta */
+  --bg-primary: #000000;
+  --bg-dark: #141414;
+  --bg-darker: #0f0f0f;
+  --bg-input: rgba(30, 30, 30, 0.7);
+  --bg-button: rgba(40, 40, 40, 0.8);
+  --bg-hud: rgba(15, 15, 15, 0.8);
+  --bg-hud-strong: rgba(15, 15, 15, 0.85);
+
+  --border-primary: rgba(255, 255, 255, 0.1);
+  --border-secondary: rgba(255, 255, 255, 0.15);
+  --border-minimap: rgba(255, 255, 255, 0.2);
+
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --text-muted: #888888;
+  --text-placeholder: #777777;
+  --text-minimap: #aaaaaa;
+
+  /* Радиусы и отступы */
+  --radius-lg: 24px;
+  --radius-md: 18px;
+  --radius-sm: 14px;
+
+  --blur-lg: blur(20px);
+  --blur-md: blur(12px);
+
+  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.8);
+  --shadow-md: 0 10px 40px rgba(0, 0, 0, 0.7);
+  --shadow-sm: 0 10px 20px rgba(0, 0, 0, 0.6);
+
+  --transition: all 0.3s ease;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Главное меню */
+#user-interface {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 420px;
+  max-width: 90vw;
+  background: rgba(20, 20, 20, 0.85);
+  border-radius: var(--radius-lg);
+  padding: 50px 30px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-primary);
+  z-index: 100;
+}
+
+.title {
+  font-size: 56px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 50px;
+  background: linear-gradient(90deg, #ffffff, #e0e0e0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -2px;
+}
+
+.input-group {
+  margin-bottom: 28px;
+}
+
+input#name {
+  width: 100%;
+  padding: 18px 20px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border-secondary);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 17px;
+  outline: none;
+  transition: var(--transition);
+}
+
+input#name:focus {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15);
+}
+
+input#name::placeholder {
+  color: var(--text-muted);
+}
+
+.button-group {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 34px;
+}
+
+.button {
+  flex: 1;
+  padding: 16px;
+  background: var(--bg-button);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.button:hover {
+  background: rgba(70, 70, 70, 0.9);
+  border-color: var(--text-primary);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-sm);
+}
+
+.button:active {
+  transform: translateY(0);
+}
+
+.primary-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+#play {
+  background: linear-gradient(135deg, #ffffff, #e0e0e0);
+  color: #000000;
+  font-size: 19px;
+  font-weight: 700;
+  border: none;
+}
+
+#play:hover {
+  background: linear-gradient(135deg, #f0f0f0, #ffffff);
+  box-shadow: 0 15px 30px rgba(255, 255, 255, 0.2);
+}
+
+/* Общие HUD элементы */
+.hud-element {
+  position: absolute;
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  border: 1px solid var(--border-primary);
+  z-index: 1;
+}
+
+#score   { top: 10px; left: 10px; z-index:1;}
+#fps     { top: 60px; left: 10px;z-index:1; }
+
+#leaderboard {
+  z-index: 1;
+  top: 10px;
+  right: 10px;
+  width: 200px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 20px;
+  scrollbar-width: none;
+}
+
+/* Чат */
+.hud-chat {
+  z-index: 1;
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 380px;
+  background: var(--bg-hud-strong);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  overflow: hidden;
+}
+
+#chat-content {
+  height: 220px;
+  padding: 18px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+#chat-field {
+  width: 100%;
+  padding: 16px 20px;
+  background: var(--bg-input);
+  border: none;
+  border-top: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  font-size: 15px;
+  outline: none;
+}
+
+#chat-field::placeholder {
+  color: var(--text-placeholder);
+}
+
+.hud-message { color: white; }
+
+/* Миникарта */
+#minimap-grid {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  pointer-events: none;
+  opacity: 0.5;
+  font-size: 11px;
+  font-weight: 700;
+  bottom: 10px;
+  right: 10px;
+  z-index: 1;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-minimap);
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.hud-minimap {
+  position: absolute;
+}
+
+/* Игровой канвас */
+#view {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-primary);
+}
+
+/* Модальные окна */
+#modals-container {
+  display: none;
+  position: fixed; /* Изменено на fixed для overlay над всем экраном */
+  inset: 0;
+  z-index: 200;
+  justify-content: center;
+  align-items: center;
+  overflow: auto; /* Если контент большой */
+}
+
+.modal-background {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6); /* Полупрозрачный фон */
+}
+
+.modal {
+  position: relative;
+  background: var(--bg-hud-strong); /* Темный фон как в HUD */
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  padding: 20px;
+  box-shadow: var(--shadow-lg);
+  min-width: 200px; /* Минимальная ширина из вашего кода */
+  max-width: 90vw;
+  z-index: 201;
+  animation: modalFadeIn 0.3s ease; /* Анимация появления */
+  height: 100%;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.anim {
+  /* Дополнительный класс для анимаций, если нужно */
+}
+
+.modal-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.modal-close {
+  cursor: pointer;
+  font-size: 24px;
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+/* Контент настроек */
+.modal-settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-settings-tile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.modal-settings-tile input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--text-primary); /* Цвет чекбокса */
+  cursor: pointer;
+}
+
+/* Аналогично для серверов (если нужно) */
+.modal-servers-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.modal-servers-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.round {
+  background: var(--bg-button);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+  </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+  <!-- Главное меню -->
+  <div id="user-interface" class="main-container">
+    <div class="title">Agar.su</div>
+    <div class="input-group">
+      <input type="text" id="name" placeholder="Введите ваше имя" />
+    </div>
+    <div class="button-group">
+      <div id="settings" class="button">Настройки</div>
+      <div id="servers" class="button">Серверы</div>
+    </div>
+    <div class="primary-buttons">
+      <div id="play" class="button">Играть</div>
+      <div id="spectate" class="button">Наблюдать</div>
+    </div>
+    <div id="modals-container"></div>
+  </div>
 
-<script>
-class Network {
-    constructor(game){
-        this.game = game;
-        this.ws = new WebSocket("wss://api.agar.su:6001");
-        this.ws.binaryType = "arraybuffer";
-        this.ws.onmessage = e => this.onMessage(e);
-    }
+  <!-- HUD элементы -->
+  <div id="score" class="hud-element">Score: 0</div>
+  <div id="fps" class="hud-element">FPS: --</div>
+  <div id="leaderboard" class="hud-element"></div>
 
-    onMessage(e){
-        const view = new DataView(e.data);
-        let o = 0;
-        const id = view.getUint8(o++);
+  <!-- Чат -->
+  <div class="hud-chat">
+    <div id="chat-content"></div>
+    <input id="chat-field" type="text" placeholder="Напишите здесь…" />
+  </div>
 
-        // HELLO
-        if(id === 0){
-            this.game.myId = view.getUint16(o,true); // Uint16 !!!
-            return;
-        }
+  <!-- Миникарта -->
+  <div id="minimap-grid">
+    <canvas id="minimap-view" width="260" height="260" class="hud-minimap"></canvas>
+    <div class="cell">A1</div><div class="cell">A2</div><div class="cell">A3</div><div class="cell">A4</div><div class="cell">A5</div>
+    <div class="cell">B1</div><div class="cell">B2</div><div class="cell">B3</div><div class="cell">B4</div><div class="cell">B5</div>
+    <div class="cell">C1</div><div class="cell">C2</div><div class="cell">C3</div><div class="cell">C4</div><div class="cell">C5</div>
+    <div class="cell">D1</div><div class="cell">D2</div><div class="cell">D3</div><div class="cell">D4</div><div class="cell">D5</div>
+    <div class="cell">E1</div><div class="cell">E2</div><div class="cell">E3</div><div class="cell">E4</div><div class="cell">E5</div>
+  </div>
 
-        if(id !== 2) return;
+  <!-- Игровой канвас -->
+  <canvas id="view"></canvas>
 
-        // map size Uint16
-        this.game.mapSize = view.getUint16(o,true); 
-        o += 2;
-
-        // FOODS (Uint16 coords)
-        const foodCount = view.getUint16(o,true); 
-        o += 2;
-
-        this.game.foods = [];
-        for(let i=0;i<foodCount;i++){
-            this.game.foods.push({
-                x: view.getUint16(o,true),
-                y: view.getUint16(o+2,true)
-            });
-            o += 4;
-        }
-
-        // PLAYERS (Uint16 everything)
-        const playerCount = view.getUint16(o,true); 
-        o += 2;
-
-        const snapshot = {
-            time: performance.now(),
-            players: []
-        };
-
-        for(let i=0;i<playerCount;i++){
-            snapshot.players.push({
-                id: view.getUint16(o,true),
-                x: view.getUint16(o+2,true),
-                y: view.getUint16(o+4,true),
-                mass: view.getUint16(o+6,true)
-            });
-            o += 8;
-        }
-
-        this.game.snapshots.push(snapshot);
-
-        while(this.game.snapshots.length > 40)
-            this.game.snapshots.shift();
-    }
-
-    // ⭐ новый супер-маленький input пакет (3 байта)
-    sendDirection(dx,dy){
-        const buf = new ArrayBuffer(3);
-        const view = new DataView(buf);
-        view.setUint8(0,1);
-
-        // нормализуем -1..1 → -127..127
-        view.setInt8(1, dx*127);
-        view.setInt8(2, dy*127);
-
-        this.ws.send(buf);
-    }
-}
-
-
-class Camera {
-    constructor(game){
-        this.game = game;
-        this.x = 0;
-        this.y = 0;
-
-        // текущий zoom (что рисуем)
-        this.zoom = 1;
-
-        // целевой zoom (куда хотим прийти)
-        this.targetZoom = 1;
-
-        this.minZoom = 0.09;
-        this.maxZoom = 2.5;
-
-        this.zoomSpeed = 0.12;   // чувствительность колесика
-        this.smooth = 0.12;      // ⭐ плавность (0.05–0.2 идеально)
-    }
-
-    update(){
-        const me = this.game.renderPlayers.get(this.game.myId);
-        if(!me) return;
-
-        // камера следует за игроком
-        this.x = me.x;
-        this.y = me.y;
-
-        // ⭐ ПЛАВНЫЙ ZOOM (lerp)
-        this.zoom += (this.targetZoom - this.zoom) * this.smooth;
-    }
-
-    addZoom(delta){
-        // меняем ЦЕЛЕВОЙ зум, а не текущий
-        this.targetZoom *= (1 - delta * this.zoomSpeed);
-
-        // clamp
-        this.targetZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.targetZoom));
-    }
-}
-
-
-class Input {
-    constructor(canvas, network){
-        this.canvas = canvas;
-        this.network = network;
-        canvas.onmousemove = e => this.onMouseMove(e);
-		canvas.onwheel = e => this.onWheel(e);
-    }
-	onWheel(e){
-    e.preventDefault();
-
-    // deltaY > 0 → колесо вниз → zoom out
-    const delta = Math.sign(e.deltaY);
-
-    this.network.game.camera.addZoom(delta);
-}
-
-
-    onMouseMove(e){
-        const dx = e.clientX - this.canvas.width/2;
-        const dy = e.clientY - this.canvas.height/2;
-        const dist = Math.hypot(dx,dy) || 1;
-        this.network.sendDirection(dx/dist, dy/dist);
-    }
-}
-
-class Renderer {
-    constructor(game, canvas){
-        this.game = game;
-        this.canvas = canvas;
-        this.ctx = canvas.getContext("2d");
-    }
-
-    resize(){
-        this.canvas.width = innerWidth;
-        this.canvas.height = innerHeight;
-    }
-
-    draw(){
-        const {ctx, canvas, game} = this;
-
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        ctx.save();
-
-// ⭐ сначала центрируем экран
-ctx.translate(canvas.width/2, canvas.height/2);
-
-// ⭐ применяем zoom
-ctx.scale(game.camera.zoom, game.camera.zoom);
-
-// ⭐ потом двигаем мир
-ctx.translate(-game.camera.x, -game.camera.y);
-
-
-        // map border
-        ctx.strokeStyle="#555";
-        ctx.strokeRect(0,0,game.mapSize,game.mapSize);
-
-        // foods
-        ctx.fillStyle="#0f0";
-        game.foods.forEach(f=>{
-            ctx.beginPath();
-            ctx.arc(f.x,f.y,3,0,Math.PI*2);
-            ctx.fill();
-        });
-
-        // ⭐ PLAYERS (renderPlayers!)
-        game.renderPlayers.forEach(p=>{
-            ctx.fillStyle = p.id===game.myId ? "#ff0" : "#09f";
-            ctx.beginPath();
-            ctx.arc(p.x,p.y,p.mass,0,Math.PI*2);
-            ctx.fill();
-        });
-
-        ctx.restore();
-    }
-}
-
-class Game {
-    constructor(){
-        this.canvas = document.getElementById("c");
-
-        this.myId = null;
-        this.mapSize = 20000;
-        this.foods = [];
-
-        // ⭐ agar interpolation system
-        this.snapshots = [];
-        this.renderPlayers = new Map();
-        this.INTERP_DELAY = 150; // 120-200ms стандарт
-
-        this.network = new Network(this);
-        this.camera = new Camera(this);
-        this.renderer = new Renderer(this, this.canvas);
-        this.input = new Input(this.canvas, this.network);
-
-        window.onresize = () => this.renderer.resize();
-        this.renderer.resize();
-
-        requestAnimationFrame(()=>this.loop());
-    }
-
-    // ищем снапшоты вокруг времени рендера
-    getSnapshotsForRender(){
-        const renderTime = performance.now() - this.INTERP_DELAY;
-        const snaps = this.snapshots;
-
-        if(snaps.length < 2) return null;
-
-        for(let i=0;i<snaps.length-1;i++){
-            const a = snaps[i];
-            const b = snaps[i+1];
-
-            if(a.time <= renderTime && b.time >= renderTime){
-                const t = (renderTime - a.time) / (b.time - a.time);
-                return {a,b,t};
-            }
-        }
-        return null;
-    }
-
-    // ⭐ интерполяция игроков
-    interpolateWorld(){
-        const data = this.getSnapshotsForRender();
-        if(!data) return;
-
-        const {a,b,t} = data;
-        this.renderPlayers.clear();
-
-        for(const newP of b.players){
-            const oldP = a.players.find(p=>p.id===newP.id);
-            if(!oldP) continue;
-
-            const x = oldP.x + (newP.x-oldP.x)*t;
-            const y = oldP.y + (newP.y-oldP.y)*t;
-            const m = oldP.mass + (newP.mass-oldP.mass)*t;
-
-            this.renderPlayers.set(newP.id,{
-                id:newP.id,
-                x,y,mass:m
-            });
-        }
-    }
-
-    loop(){
-        this.interpolateWorld();
-        this.camera.update();
-        this.renderer.draw();
-        requestAnimationFrame(()=>this.loop());
-    }
-}
-
-new Game();
-
-
-</script>
+  <script src="./main.js?1"></script>
 </body>
 </html>
