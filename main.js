@@ -244,8 +244,8 @@
             const newZIndex = this.id;
 
             if (this._lastZIndex !== newZIndex) {
-                this.sprite.zIndex = -newZIndex;
-                this._lastZIndex = newZIndex;
+                this.sprite.zIndex = newZIndex - 1;
+                this._lastZIndex = newZIndex - 1;
             }
         }
 
