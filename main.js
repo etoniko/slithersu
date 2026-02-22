@@ -241,7 +241,7 @@
             //     this._lastZIndex = newZIndex;
             // }
 
-            const newZIndex = this.id;
+            const newZIndex = -this.id;
 
             if (this._lastZIndex !== newZIndex) {
                 this.sprite.zIndex = newZIndex;
