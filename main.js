@@ -244,8 +244,8 @@
             const newZIndex = this.id;
 
             if (this._lastZIndex !== newZIndex) {
-                this.sprite.zIndex = newZIndex - 1;
-                this._lastZIndex = newZIndex - 1;
+                this.sprite.zIndex = newZIndex;
+                this._lastZIndex = newZIndex;
             }
         }
 
@@ -923,7 +923,7 @@
             sprite.anchor.set(.5)
             sprite.roundPixels = false;
 
-            this.core.app.stage.addChild(sprite)
+            this.core.app.stage.addChildAt(sprite, 0)
 
             const cell = new Cell(this.core, id, x, y, r, sprite, name, color);
             cellsByID.set(id, cell);
