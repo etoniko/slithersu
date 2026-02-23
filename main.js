@@ -77,7 +77,7 @@
             this.skinMask = null;
             // Кэш для оптимизации обновлений
             this._lastScale = r / 256;
-            this._lastZIndex = r * 2;
+            this._lastZIndex = this.core.app.ownedCells.length - this.core.app.ownedCells.indexOf(this.id);
             this._visible = true; // для frustum culling
 
             this.sprite.scale.set(r / 256);
@@ -241,12 +241,20 @@
             //     this._lastZIndex = newZIndex;
             // }
 
-            const newZIndex = this.id;
+            // const newZIndex = this.id; // this.core.app.ownedCells
+
+            // if (this._lastZIndex !== newZIndex) {
+            //     this.sprite.zIndex = newZIndex;
+            //     this._lastZIndex = newZIndex;
+            // }
+
+            const newZIndex =  this.core.app.ownedCells.length - this.core.app.ownedCells.indexOf(this.id);
 
             if (this._lastZIndex !== newZIndex) {
                 this.sprite.zIndex = newZIndex;
                 this._lastZIndex = newZIndex;
             }
+
         }
 
 
