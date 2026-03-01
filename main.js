@@ -814,7 +814,6 @@
             clearInterval(this.pingInterval)
             clearInterval(this.mouseMoveInterval)
             cancelAnimationFrame(this.core.app.hueShiftingRAF)
-            this.mouseMoveInterval = null;
         }
 
         send(data) {
@@ -855,15 +854,18 @@
 
             }, 3000);
 this.mouseMoveInterval = setInterval(() => {
-    // Если нет своих клеток — ничего не шлём (до спавна / спектатор)
-    if (this.core.app.ownedCells.length === 0) return;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-    // Вычисляем мировые координаты по последнему положению мыши
-    // (даже если мышь не двигалась — координаты останутся старыми → клетка продолжит лететь)
-    const worldX = (this.core.ui.mouse.x - innerWidth / 2) / this.core.app.camera.s + this.core.app.camera.x;
-    const worldY = (this.core.ui.mouse.y - innerHeight / 2) / this.core.app.camera.s + this.core.app.camera.y;
+    const cam = this.core.app.camera;
+    const mx = (this.core.ui.mouse.x - innerWidth  / 2) / cam.s + cam.x;
+    const my = (this.core.ui.mouse.y - innerHeight / 2) / cam.s + cam.y;
 
-    this.sendMouseMove(worldX, worldY);
+    // Очень желательно ограничивать координаты границами карты
+    const border = this.border;
+    const clampedX = Math.max(border.left,   Math.min(border.right,  mx));
+    const clampedY = Math.max(border.top,    Math.min(border.bottom, my));
+
+    this.sendMouseMove(clampedX, clampedY);
 }, 40);
         }
 
