@@ -766,8 +766,6 @@
             this.ownerPlayerId = 0
             this.ping = 0
             this.pingstamp = 0
-            this.lastMouseX = 0;
-this.lastMouseY = 0;
         }
 
         connect(addr, passedToken) {
@@ -855,32 +853,12 @@ this.lastMouseY = 0;
                 }
 
             }, 3000);
-this.mouseMoveInterval = setInterval(() => {
-    if (!this.ws || this.ws.readyState !== 1) return;
-
-    let targetX, targetY;
-
-    if (document.hidden) {
-        // вкладка неактивна → продолжаем слать последнюю известную точку
-        targetX = this.lastMouseX;
-        targetY = this.lastMouseY;
-    } else {
-        // вкладка активна → считаем по реальной мышке
-        const cam = this.core.app.camera;
-        targetX = (this.core.ui.mouse.x - innerWidth / 2) / cam.s + cam.x;
-        targetY = (this.core.ui.mouse.y - innerHeight / 2) / cam.s + cam.y;
-
-        // запоминаем для будущего
-        this.lastMouseX = targetX;
-        this.lastMouseY = targetY;
-    }
-
-    // ограничение по границам карты (очень важно, иначе сервер может игнорировать)
-    targetX = Math.max(this.border.left, Math.min(this.border.right, targetX));
-    targetY = Math.max(this.border.top, Math.min(this.border.bottom, targetY));
-
-    this.sendMouseMove(targetX, targetY);
-}, 40);
+            this.mouseMoveInterval = setInterval(() => {
+                this.sendMouseMove(
+                    (this.core.ui.mouse.x - innerWidth / 2) / this.core.app.camera.s + this.core.app.camera.x,
+                    (this.core.ui.mouse.y - innerHeight / 2) / this.core.app.camera.s + this.core.app.camera.y
+                );
+            }, 40);
         }
 
         onMessage({ data }) {
