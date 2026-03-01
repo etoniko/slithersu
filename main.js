@@ -766,6 +766,8 @@
             this.ownerPlayerId = 0
             this.ping = 0
             this.pingstamp = 0
+            this.lastMouseX = 0;
+this.lastMouseY = 0;
         }
 
         connect(addr, passedToken) {
@@ -854,18 +856,30 @@
 
             }, 3000);
 this.mouseMoveInterval = setInterval(() => {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ws || this.ws.readyState !== 1) return;
 
-    const cam = this.core.app.camera;
-    const mx = (this.core.ui.mouse.x - innerWidth  / 2) / cam.s + cam.x;
-    const my = (this.core.ui.mouse.y - innerHeight / 2) / cam.s + cam.y;
+    let targetX, targetY;
 
-    // Очень желательно ограничивать координаты границами карты
-    const border = this.border;
-    const clampedX = Math.max(border.left,   Math.min(border.right,  mx));
-    const clampedY = Math.max(border.top,    Math.min(border.bottom, my));
+    if (document.hidden) {
+        // вкладка неактивна → продолжаем слать последнюю известную точку
+        targetX = this.lastMouseX;
+        targetY = this.lastMouseY;
+    } else {
+        // вкладка активна → считаем по реальной мышке
+        const cam = this.core.app.camera;
+        targetX = (this.core.ui.mouse.x - innerWidth / 2) / cam.s + cam.x;
+        targetY = (this.core.ui.mouse.y - innerHeight / 2) / cam.s + cam.y;
 
-    this.sendMouseMove(clampedX, clampedY);
+        // запоминаем для будущего
+        this.lastMouseX = targetX;
+        this.lastMouseY = targetY;
+    }
+
+    // ограничение по границам карты (очень важно, иначе сервер может игнорировать)
+    targetX = Math.max(this.border.left, Math.min(this.border.right, targetX));
+    targetY = Math.max(this.border.top, Math.min(this.border.bottom, targetY));
+
+    this.sendMouseMove(targetX, targetY);
 }, 40);
         }
 
