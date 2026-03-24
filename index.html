@@ -36,6 +36,7 @@
         this.nodeY = 0;
         this.posX = 0;
         this.posY = 0;
+this.spaceInterval = null;  // для хранения интервала
 		this.mainCell = null;
         this.mainCellLockTime = 0;
         this.posSize = 1;
@@ -87,7 +88,6 @@
         // Управление
         this.isTyping = false;
         this.spacePressed = false;
-        this.wPressed = false;
         this.hasOverlay = true;
         // Капча
         this.captchaId = null;
@@ -288,13 +288,20 @@
                         }
                     }
                     break;
-                case 32:
-                    if ((!this.spacePressed) && (!this.isTyping)) {
-                        this.sendMouseMove();
-                        this.sendUint8(17);
-                        this.spacePressed = true;
-                    }
-                    break;
+case 32:
+    if ((!this.spacePressed) && (!this.isTyping)) {
+        this.sendMouseMove();  // отправляем текущую позицию
+        this.sendUint8(17);    // сигнал начала движения
+        this.spacePressed = true;
+        
+        // Запускаем интервал отправки каждые 40 мс
+        this.spaceInterval = setInterval(() => {
+            if (this.spacePressed && this.wsIsOpen()) {
+                this.sendMouseMove();  // отправляем пакет с позицией
+            }
+        }, 40);
+    }
+    break;
                 case 87:
                     if ((!this.wPressed) && (!this.isTyping)) {
                         this.sendMouseMove();
@@ -603,9 +610,6 @@
                 this.wsSend(msg);
             }
         }
-    if (this.spacePressed && !this.isTyping) {
-        this.sendUint8(17);
-    }
     }
     
     getColorId(hex) {
