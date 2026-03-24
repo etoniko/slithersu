@@ -316,18 +316,28 @@ case 32:
         };
         onkeyup = (event) => {
             switch (event.keyCode) {
-                case 32:
-                    this.spacePressed = false;
-                    break;
+case 32:
+    this.spacePressed = false;
+    // Останавливаем интервал
+    if (this.spaceInterval) {
+        clearInterval(this.spaceInterval);
+        this.spaceInterval = null;
+    }
+    break;
                 case 87:
                     this.wPressed = false;
                     break;
             }
         };
-        onblur = () => {
-            this.sendUint8(19);
-            this.wPressed = this.spacePressed = false;
-        };
+onblur = () => {
+    this.sendUint8(19);
+    this.wPressed = this.spacePressed = false;
+    // Останавливаем интервал при потере фокуса
+    if (this.spaceInterval) {
+        clearInterval(this.spaceInterval);
+        this.spaceInterval = null;
+    }
+};
         onresize = this.canvasResize.bind(this);
         this.canvasResize();
         if (requestAnimationFrame) {
