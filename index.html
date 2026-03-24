@@ -1,412 +1,1676 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
+
 <head>
-  <meta charset="utf-8" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="Eat cells smaller than you and don't get eaten by the bigger ones, as an MMO" />
-  <meta name="robots" content="index, follow">
-  <title>Slither.su</title>
-  <link rel="canonical" href="https://agar.su/beta/index.html">
-  <link id="favicon" rel="icon" type="image/png" href="https://agar.su/icon.svg" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+     <title>Slither.su - Русский Слизар</title>
+    <meta name="description" content="Самая известная игра в слитере в мире! Играйте с миллионами игроков по всему миру и постарайтесь стать самым длинным игроком дня!">
+	<meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="keywords" content="агарио, agario, agar, io, cell, cells, bacteria, blob, game, games, web game, html5, fun, flash">
+    <meta name="robots" content="index, follow">
+    <meta name="viewport" content="minimal-ui, width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="yandex-verification" content="d2648e3bc2d73129" />
+	
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
+    <link href='https://fonts.googleapis.com/css?family=Ubuntu:700' rel='stylesheet' type='text/css'>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" rel="stylesheet">
+    <script>
+	class Game {
+    constructor() {
+        // Соединение
+        this.CONNECTION_URL = "";
+        this.currentWebSocketUrl = null;
+        this.ws = null;
+        this.Delay = 500;
+        this.useHttps = location.protocol === "https:";
+        // Canvas и отрисовка
+        this.canvas = null;
+        this.ctx = null;
+        this.canvasWidth = 0;
+        this.canvasHeight = 0;
+        this.viewZoom = 1;
+        this.zoom = 1;
+        this.nodeX = 0;
+        this.nodeY = 0;
+        this.posX = 0;
+        this.posY = 0;
+		this.mainCell = null;
+        this.mainCellLockTime = 0;
+        this.posSize = 1;
+        // Границы карты
+        this.leftPos = 0;
+        this.topPos = 0;
+        this.rightPos = 0;
+        this.bottomPos = 0;
+        this.ownerPlayerId = -1;
+        // Игрок и клетки
+        this.playerCells = [];
+        this.nodes = {};
+        this.nodelist = [];
+        this.Cells = []; // уничтоженные клетки (анимация)
+        this.nodesOnScreen = [];
+        // Интерфейс и HUD
+        this.leaderBoard = [];
+        this.chatBoard = [];
+        this.lbCanvas = null;
+        this.chatCanvas = null;
+        this.scoreText = null;
+        this.userScore = 0;
+        this.userNickName = null;
+		this.skinMap = {};     // nick -> codeid
+        this.skinCache = {};   // codeid -> Image
+        this.skinLoading = {}; // чтобы не грузить 100 раз
+        this.hideChat = false;
+        this.showDarkTheme = false;
+        this.showName = true;
+        this.showSkin = true;
+        this.showMass = true;
+		this.interpSpeed = 120; // скорость интерполяции (по умолчанию середина)
+        this.noRanking = false;
+        // Мышь и ввод
+        this.rawMouseX = 0;
+        this.rawMouseY = 0;
+        this.X = -1;
+        this.Y = -1;
+        this.oldX = -1;
+        this.oldY = -1;
+        // Производительность и время
+        this.timestamp = 0;
+        this.cb = 0; // счётчик кадров
+        this.fpsLastTime = 0;
+        this.fpsCount = 0;
+        this.currentFPS = 0;
+		this.ping = 0;    
+        this.pingstamp = 0;
+        // Управление
+        this.isTyping = false;
+        this.spacePressed = false;
+        this.wPressed = false;
+        this.hasOverlay = true;
+        // Капча
+        this.captchaId = null;
+        //прочее
+        this.z = 1;
+        this.cellColors = [];
+        this.teamColor = ["#333333", "#FF3333", "#33FF33", "#3333FF"];
+        this.ma = false;
+        this.mainCanvas = null;
+        this.nCanvas = null;
+        this.mapWidth = 0;
+        this.mapHeight = 0;
+        // Эффекты частиц
+        this.particles = [];
+        // Анимация времени
+        this.time = 0;
+        
+        window.setNick = this.setNick.bind(this);
+        window.setSpect = this.setSpect.bind(this);
+        window.setServer = this.setServer.bind(this);
+        window.setSkins = (arg) => { this.showSkin = !arg; };
+        window.setNames = (arg) => { this.showName = arg; };
+        window.setDarkTheme = (arg) => { this.showDarkTheme = arg; };
+        window.setShowMass = (arg) => { this.showMass = arg; };
+        window.setChatHide = (arg) => { this.hideChat = arg; };
+		window.setSpeedStage = (stage) => {
+            stage = parseInt(stage);
+            let speed = 120;
+            let label = "Normal";
+            if (stage === 1) { speed = 240; label = "Slow"; }
+            if (stage === 2) { speed = 120; label = "Normal"; }
+            if (stage === 3) { speed = 60; label = "Fast"; }
+            game.interpSpeed = speed;
+            document.getElementById("speedLabel").innerText = stage + " (" + label + ")";
+        };
+    }
+	
+	async loadSkinList() {
+        try {
+            const res = await fetch("https://api.agar.su/skinlist.txt");
+            const text = await res.text();
+            text.split("\n").forEach(line => {
+                line = line.trim();
+                if (!line) return;
+                const [nick, code] = line.split(":");
+                if (!nick || !code) return;
+                this.skinMap[nick.toLowerCase()] = code.trim();
+            });
+            console.log("Skin list loaded:", Object.keys(this.skinMap).length);
+        } catch (e) {
+            console.error("Skin list load error", e);
+        }
+    }
 
-:root {
-  /* Ц veta */
-  --bg-primary: #000000;
-  --bg-dark: #141414;
-  --bg-darker: #0f0f0f;
-  --bg-input: rgba(30, 30, 30, 0.7);
-  --bg-button: rgba(40, 40, 40, 0.8);
-  --bg-hud: rgba(15, 15, 15, 0.8);
-  --bg-hud-strong: rgba(15, 15, 15, 0.85);
-
-  --border-primary: rgba(255, 255, 255, 0.1);
-  --border-secondary: rgba(255, 255, 255, 0.15);
-  --border-minimap: rgba(255, 255, 255, 0.2);
-
-  --text-primary: #ffffff;
-  --text-secondary: #e0e0e0;
-  --text-muted: #888888;
-  --text-placeholder: #777777;
-  --text-minimap: #aaaaaa;
-
-  /* Радиусы и отступы */
-  --radius-lg: 24px;
-  --radius-md: 18px;
-  --radius-sm: 14px;
-
-  --blur-lg: blur(20px);
-  --blur-md: blur(12px);
-
-  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.8);
-  --shadow-md: 0 10px 40px rgba(0, 0, 0, 0.7);
-  --shadow-sm: 0 10px 20px rgba(0, 0, 0, 0.6);
-
-  --transition: all 0.3s ease;
+    getSkinForNick(nick) {
+        if (!nick) return null;
+        const code = this.skinMap[nick.toLowerCase()];
+        if (!code) return null;
+        if (this.skinCache[code]) return this.skinCache[code];
+        if (this.skinLoading[code]) return null;
+        const img = new Image();
+        img.src = "https://api.agar.su/skins/" + code + ".png";
+        this.skinLoading[code] = true;
+        img.onload = () => {
+            this.skinCache[code] = img;
+            delete this.skinLoading[code];
+        };
+        img.onerror = () => {
+            delete this.skinLoading[code];
+        };
+        return null;
+    }
+    
+    getXp(level) {
+        return ~~(100 * (level ** 2 / 2));
+    }
+    getLevel(xp) {
+        return ~~((xp / 100 * 2) ** 0.5);
+    }
+    setNick(arg) {
+        this.hideOverlays();
+        this.userNickName = arg + "#";
+        this.sendNickName();
+        this.userScore = 0;
+    }
+    setSpect() {
+        this.userNickName = null;
+        this.sendUint8(1);
+        this.hideOverlays();
+    }
+    setServer(arg) {
+        if (arg !== this.CONNECTION_URL) {
+            this.CONNECTION_URL = arg;
+            this.showCaptcha();
+        }
+    }
+    onCaptchaSuccess(token) {
+        this.showConnecting(token);
+    }
+    renderCaptcha() {
+        if (this.captchaId !== null) {
+            document.getElementById('captcha-overlay').style.display = '';
+            turnstile.reset(this.captchaId);
+            return;
+        }
+        const overlay = document.createElement("div");
+        overlay.id = "captcha-overlay";
+        const container = document.createElement("div");
+        container.id = "captcha-container";
+        overlay.appendChild(container);
+        document.body.prepend(overlay);
+        this.captchaId = turnstile.render(container, {
+            sitekey: "0x4AAAAAAA0keHJ56_KNR0MU",
+            callback: this.onCaptchaSuccess.bind(this)
+        });
+    }
+    showCaptcha() {
+        if (window.turnstile) return this.renderCaptcha();
+        const node = document.createElement('script');
+        node.setAttribute('src', 'https://challenges.cloudflare.com/turnstile/v0/api.js');
+        node.setAttribute('async', 'async');
+        node.setAttribute('defer', 'defer');
+        node.onload = () => {
+            this.renderCaptcha();
+        };
+        node.onerror = () => {
+            alert("Не удалось загрузить библиотеку Captcha. Попробуйте обновить браузер");
+        };
+        document.head.appendChild(node);
+    }
+    disableCaptcha() {
+        const captchaOverlay = document.getElementById('captcha-overlay');
+        if (captchaOverlay) captchaOverlay.remove();
+        const scripts = document.querySelectorAll('script[src*="challenges.cloudflare.com/turnstile"]');
+        scripts.forEach(s => s.remove());
+        if (window.turnstile) delete window.turnstile;
+        this.captchaId = null;
+        console.log("Captcha полностью отключена до перезагрузки страницы или соединение нового сервера");
+    }
+    
+    gameLoop() {
+        this.ma = true;
+        document.getElementById("canvas").focus();
+        this.isTyping = false;
+        let chattxt;
+        this.mainCanvas = this.nCanvas = document.getElementById("canvas");
+        this.ctx = this.mainCanvas.getContext("2d");
+		this.loadSkinList();
+        this.mainCanvas.onmousemove = (event) => {
+            this.rawMouseX = event.clientX;
+            this.rawMouseY = event.clientY;
+            this.mouseCoordinateChange();
+        };
+        const updateMouseAim = () => {
+            let x = this.X < this.rightPos ? this.X : this.rightPos;
+            let y = this.Y < this.bottomPos ? this.Y : this.bottomPos;
+            x = -this.rightPos > x ? -this.rightPos : x;
+            y = -this.bottomPos > y ? -this.bottomPos : y;
+            this.posX = x;
+            this.posY = y;
+        };
+        this.mainCanvas.addEventListener("mousedown", () => {
+            if (!this.playerCells.length) {
+                updateMouseAim();
+                this.sendUint8(1);
+            }
+        });
+        this.mainCanvas.onmouseup = function() {};
+        if (/firefox/i.test(navigator.userAgent)) {
+            document.addEventListener("DOMMouseScroll", this.handleWheel.bind(this), false);
+        } else {
+            document.body.onmousewheel = this.handleWheel.bind(this);
+        }
+        this.mainCanvas.onfocus = () => {
+            this.isTyping = false;
+        };
+        document.getElementById("chat_textbox").onblur = () => {
+            this.isTyping = false;
+        };
+        document.getElementById("chat_textbox").onfocus = () => {
+            this.isTyping = true;
+        };
+        this.spacePressed = false;
+        this.wPressed = false;
+        onkeydown = (event) => {
+            switch (event.keyCode) {
+                case 13:
+                    if (this.isTyping || this.hideChat) {
+                        this.isTyping = false;
+                        document.getElementById("chat_textbox").blur();
+                        chattxt = document.getElementById("chat_textbox").value;
+                        if (chattxt.length > 0) this.sendChat(chattxt);
+                        document.getElementById("chat_textbox").value = "";
+                    } else {
+                        if (!this.hasOverlay) {
+                            document.getElementById("chat_textbox").focus();
+                            this.isTyping = true;
+                        }
+                    }
+                    break;
+                case 32:
+                    if ((!this.spacePressed) && (!this.isTyping)) {
+                        this.sendMouseMove();
+                        this.sendUint8(17);
+                        this.spacePressed = true;
+                    }
+                    break;
+                case 87:
+                    if ((!this.wPressed) && (!this.isTyping)) {
+                        this.sendMouseMove();
+                        this.sendUint8(21);
+                        this.wPressed = true;
+                    }
+                    break;
+                case 27:
+                    this.showOverlays(true);
+                    break;
+            }
+        };
+        onkeyup = (event) => {
+            switch (event.keyCode) {
+                case 32:
+                    this.spacePressed = false;
+                    break;
+                case 87:
+                    this.wPressed = false;
+                    break;
+            }
+        };
+        onblur = () => {
+            this.sendUint8(19);
+            this.wPressed = this.spacePressed = false;
+        };
+        onresize = this.canvasResize.bind(this);
+        this.canvasResize();
+        if (requestAnimationFrame) {
+            requestAnimationFrame(this.redrawGameScene.bind(this));
+        } else {
+            setInterval(this.drawGameScene.bind(this), 1E3 / 60);
+        }
+        setInterval(this.sendMouseMove.bind(this), 40);
+        setTimeout(this.showCaptcha.bind(this), 100);
+        document.querySelector("#overlays").style = "display:block;";
+		const select = document.getElementById("gamemode");
+        if (select && select.value) {
+            this.CONNECTION_URL = select.value;
+        }
+        
+        // Анимация времени для фона
+        setInterval(() => {
+            this.time += 0.02;
+        }, 16);
+		this.loadBackground();
+    }
+    
+    handleWheel(event) {
+        this.zoom *= Math.pow(.9, event.wheelDelta / -120 || event.detail || 0);
+        if (this.zoom < 0) this.zoom = 1;
+        if (this.zoom > 4 / this.viewZoom) this.zoom = 4 / this.viewZoom;
+        if (this.zoom < 0.3) this.zoom = 0.3;
+    }
+    
+    mouseCoordinateChange() {
+        this.X = (this.rawMouseX - this.canvasWidth / 2) / this.viewZoom + this.nodeX;
+        this.Y = (this.rawMouseY - this.canvasHeight / 2) / this.viewZoom + this.nodeY;
+    }
+    
+    hideOverlays() {
+        this.hasOverlay = false;
+        document.querySelector("#overlays").style = "display:none;";
+    }
+    
+    showOverlays(arg) {
+        this.hasOverlay = true;
+        this.userNickName = null;
+        document.querySelector("#overlays").style = "display:block;";
+    }
+    
+    showConnecting(token) {
+        const wsUrl = (this.useHttps ? "wss://" : "ws://") + this.CONNECTION_URL;
+        if (this.ws && this.ws.readyState === WebSocket.OPEN && this.currentWebSocketUrl === wsUrl) {
+            console.log("Соединение уже активно для этого URL, пропускаем повторное подключение.");
+            return;
+        }
+        if (this.ma) {
+            this.currentWebSocketUrl = wsUrl;
+            this.wsConnect(wsUrl, token);
+            this.disableCaptcha();
+        }
+    }
+    
+    wsConnect(undefined, token) {
+        if (this.ws) {
+            this.ws.onopen = null;
+            this.ws.onmessage = null;
+            this.ws.onclose = null;
+            try {
+                this.ws.close();
+            } catch (b) {}
+            this.ws = null;
+        }
+        const wsUrl = (this.useHttps ? "wss://" : "ws://") + this.CONNECTION_URL;
+        this.playerCells = [];
+        this.nodes = {};
+        this.nodelist = [];
+        this.Cells = [];
+        this.leaderBoard = [];
+        console.info("Connecting to " + wsUrl + "..");
+        const params = `?token=${encodeURIComponent(token)}&accountToken=${encodeURIComponent(localStorage.accountToken)}`;
+        this.ws = new WebSocket(wsUrl + params, "eSejeKSVdysQvZs0ES1H");
+        this.ws.binaryType = "arraybuffer";
+        this.ws.onopen = this.onWsOpen.bind(this);
+        this.ws.onmessage = this.onWsMessage.bind(this);
+        this.ws.onclose = this.onWsClose.bind(this);
+    }
+    
+    prepareData(a) {
+        return new DataView(new ArrayBuffer(a));
+    }
+    
+    wsSend(a) {
+        this.ws.send(a.buffer);
+    }
+    
+    onWsOpen() {
+        let msg;
+        this.delay = 500;
+        document.querySelector("#connecting").style = "display:none;";
+        msg = this.prepareData(5);
+        msg.setUint8(0, 254);
+        msg.setUint32(1, 5, true);
+        this.wsSend(msg);
+        msg = this.prepareData(5);
+        msg.setUint8(0, 255);
+        msg.setUint32(1, 0, true);
+        this.wsSend(msg);
+        this.sendNickName();
+        console.info("Connection successful!");
+		setInterval(() => {    
+            if (!document.hidden) {        
+                this.pingstamp = Date.now();           
+                this.wsSend(new Uint8Array([2]));        
+            }      
+        }, 3000);
+		setTimeout(() => { this.sendChat("вошёл в игру!"); }, 1000); 
+    }
+    
+    onWsClose() {
+        setTimeout(this.showConnecting.bind(this), this.delay);
+        this.delay *= 1.5;
+    }
+    
+    onWsMessage(msg) {
+        this.handleWsMessage(new DataView(msg.data));
+    }
+    
+    handleWsMessage(msg) {
+        let offset = 0;
+        let setCustomLB = false;
+        function getString() {
+            let text = '';
+            let char;
+            while ((char = msg.getUint16(offset, true)) !== 0) {
+                offset += 2;
+                text += String.fromCharCode(char);
+            }
+            offset += 2;
+            return text;
+        }
+        const messageType = msg.getUint8(offset++);
+        switch (messageType) {
+            case 2:
+                this.ping = Date.now() - this.pingstamp;
+                break;
+            case 16:
+                const reader = new BinaryReader(msg);
+                reader.offset++;
+                this.updateNodes(reader);
+                break;
+            case 17:
+                this.posSize = 0.15;
+                break;
+            case 20:
+                this.playerCells = [];
+                break;
+            case 48:
+                setCustomLB = true;
+                this.noRanking = true;
+                const count = msg.getUint32(offset, true);
+                offset += 4;
+                this.leaderBoard = [];
+                for (let i = 0; i < count; i++) {
+                    const nodeId = msg.getUint32(offset, true);
+                    offset += 4;
+                    const text = getString();
+                    this.leaderBoard.push({
+                        id: null,
+                        name: text,
+                        level: -1,
+                        xp: 0
+                    });
+                }
+                this.drawLeaderBoard();
+                break;
+            case 49:
+                if (!setCustomLB) {
+                    this.noRanking = false;
+                }
+                const LBplayerNum = msg.getUint32(offset, true);
+                offset += 4;
+                this.leaderBoard = [];
+                for (let i = 0; i < LBplayerNum; ++i) {
+                    const nodeId = msg.getUint32(offset, true);
+                    offset += 4;
+                    const playerName = getString();
+                    const playerXp = msg.getUint32(offset, true);
+                    offset += 4;
+                    const level = playerXp ? this.getLevel(playerXp) : -1;
+                    this.leaderBoard.push({
+                        id: nodeId,
+                        name: playerName,
+                        level,
+                        xp: playerXp
+                    });
+                }
+                this.drawLeaderBoard();
+                break;
+            case 64:
+                this.leftPos = msg.getFloat64(offset, true);
+                offset += 8;
+                this.topPos = msg.getFloat64(offset, true);
+                offset += 8;
+                this.rightPos = msg.getFloat64(offset, true);
+                offset += 8;
+                this.bottomPos = msg.getFloat64(offset, true);
+                offset += 8;
+                msg.getUint16(offset, true);
+                offset += 2;
+                msg.getUint16(offset, true);
+                offset += 2;
+                this.ownerPlayerId = msg.getUint32(offset, true);
+                offset += 4;
+                this.mapWidth = (this.rightPos + this.leftPos) / 2;
+                this.mapHeight = (this.bottomPos + this.topPos) / 2;
+                this.posX = (this.rightPos + this.leftPos) / 2;
+                this.posY = (this.bottomPos + this.topPos) / 2;
+                this.posSize = 1;
+                if (this.playerCells.length === 0) {
+                    this.nodeX = this.posX;
+                    this.nodeY = this.posY;
+                    this.viewZoom = this.posSize;
+                }
+                break;
+            case 99:
+                this.addChat(msg, offset);
+                break;
+            case 114:
+                const xp = msg.getUint32(offset, true);
+                this.onUpdateXp(xp);
+                break;
+        }
+    }
+    
+    addChat(view, offset) {
+        function getString() {
+            var text = '',
+                char;
+            while ((char = view.getUint16(offset, true)) != 0) {
+                offset += 2;
+                text += String.fromCharCode(char);
+            }
+            offset += 2;
+            return text;
+        }
+        var flags = view.getUint8(offset++);
+        if (flags & 0x80) {};
+        var r = view.getUint8(offset++),
+            g = view.getUint8(offset++),
+            b = view.getUint8(offset++),
+            color = (r << 16 | g << 8 | b).toString(16);
+        while (color.length < 6) {
+            color = '0' + color;
+        }
+        const playerXp = view.getUint32(offset, true);
+        offset += 4;
+        const pId = view.getUint16(offset, true);
+        offset += 2;
+        color = '#' + color;
+        this.chatBoard.push({
+            "pId": pId,
+            "playerXp": playerXp,
+            "playerLevel": playerXp ? this.getLevel(playerXp) : -1,
+            "name": getString(),
+            "color": color,
+            "message": getString()
+        });
+        this.drawChatBoard();
+    }
+    
+    sendMouseMove() {
+        var msg;
+        if (this.wsIsOpen()) {
+            msg = this.rawMouseX - this.canvasWidth / 2;
+            var b = this.rawMouseY - this.canvasHeight / 2;
+            if (64 <= msg * msg + b * b && !(.01 > Math.abs(this.oldX - this.X) && .01 > Math.abs(this.oldY - this.Y))) {
+                this.oldX = this.X;
+                this.oldY = this.Y;
+                msg = this.prepareData(21);
+                msg.setUint8(0, 16);
+                msg.setFloat64(1, this.X, true);
+                msg.setFloat64(9, this.Y, true);
+                msg.setUint32(17, 0, true);
+                this.wsSend(msg);
+            }
+        }
+    }
+    
+    getColorId(hex) {
+        const index = this.cellColors.indexOf(hex);
+        return index === -1 ? 0 : index + 1;
+    }
+    
+    sendNickName() {
+        if (this.wsIsOpen() && this.userNickName != null) {
+            var msg = this.prepareData(1 + 2 * this.userNickName.length + 1);
+            msg.setUint8(0, 0);
+            msg.setUint8(1, this.getColorId(localStorage.getItem("selectedColor")));
+            for (var i = 0; i < this.userNickName.length; ++i) msg.setUint16(1 + 2 * i + 1, this.userNickName.charCodeAt(i), true);
+            this.wsSend(msg);
+        }
+    }
+    
+    sendChat(str) {
+        if (this.wsIsOpen() && (str.length < 200) && (str.length > 0) && !this.hideChat) {
+            var msg = this.prepareData(2 + 2 * str.length);
+            var offset = 0;
+            msg.setUint8(offset++, 99);
+            msg.setUint8(offset++, 0);
+            for (var i = 0; i < str.length; ++i) {
+                msg.setUint16(offset, str.charCodeAt(i), true);
+                offset += 2;
+            }
+            this.wsSend(msg);
+        }
+    }
+    
+    wsIsOpen() {
+        return this.ws != null && this.ws.readyState === this.ws.OPEN;
+    }
+    
+    sendUint8(a) {
+        if (this.wsIsOpen()) {
+            var msg = this.prepareData(1);
+            msg.setUint8(0, a);
+            this.wsSend(msg);
+        }
+    }
+    
+    redrawGameScene() {
+        this.drawGameScene();
+        requestAnimationFrame(this.redrawGameScene.bind(this));
+    }
+    
+    canvasResize() {
+        window.scrollTo(0, 0);
+        this.canvasWidth = innerWidth;
+        this.canvasHeight = innerHeight;
+        this.nCanvas.width = this.canvasWidth;
+        this.nCanvas.height = this.canvasHeight;
+        this.drawGameScene();
+    }
+    
+    viewRange() {
+        var ratio;
+        ratio = Math.max(this.canvasHeight / 1080, this.canvasWidth / 1920);
+        return ratio * this.zoom;
+    }
+    
+    calcViewZoom() {
+        if (0 != this.playerCells.length) {
+            for (var newViewZoom = 0, i = 0; i < this.playerCells.length; i++) newViewZoom += this.playerCells[i].size;
+            newViewZoom = Math.pow(Math.min(64 / newViewZoom, 1), .1) * this.viewRange();
+            this.viewZoom = (9 * this.viewZoom + newViewZoom) / 10;
+        }
+    }
+    
+// НОВЫЙ КРАСИВЫЙ ФОН В СТИЛЕ SLITHER.IO
+drawGrid() {
+    // 1. Сохраняем состояние для рисования
+    this.ctx.save();
+    
+    // 2. Применяем трансформации
+    this.ctx.translate(this.canvasWidth / 2, this.canvasHeight / 2);
+    this.ctx.scale(this.viewZoom, this.viewZoom);
+    this.ctx.translate(-this.nodeX, -this.nodeY);
+    
+    // Получаем границы карты (приходят с сервера)
+    const mapLeft = this.leftPos;
+    const mapTop = this.topPos;
+    const mapRight = this.rightPos;
+    const mapBottom = this.bottomPos;
+    const mapWidth = mapRight - mapLeft;
+    const mapHeight = mapBottom - mapTop;
+    
+    // Масштаб фона (чем меньше число, тем крупнее изображение)
+    // 1 = оригинальный размер
+    // 0.5 = увеличение в 2 раза
+    // 0.25 = увеличение в 4 раза
+    const bgScale = 2; // ← ЭТО ЗНАЧЕНИЕ ОТВЕЧАЕТ ЗА УВЕЛИЧЕНИЕ ФОНА
+    
+    // 3. Рисуем фоновое изображение ВНУТРИ карты
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(mapLeft, mapTop, mapWidth, mapHeight);
+    this.ctx.clip();
+    
+    if (this.backgroundImage) {
+        const originalImgWidth = this.backgroundImage.width;
+        const originalImgHeight = this.backgroundImage.height;
+        
+        // Увеличиваем размер изображения
+        const imgWidth = originalImgWidth * bgScale;
+        const imgHeight = originalImgHeight * bgScale;
+        
+        const viewLeft = this.nodeX - this.canvasWidth / 2 / this.viewZoom;
+        const viewTop = this.nodeY - this.canvasHeight / 2 / this.viewZoom;
+        const viewWidth = this.canvasWidth / this.viewZoom;
+        const viewHeight = this.canvasHeight / this.viewZoom;
+        
+        const startX = Math.floor(viewLeft / imgWidth) * imgWidth;
+        const startY = Math.floor(viewTop / imgHeight) * imgHeight;
+        
+        const repeatX = Math.ceil(viewWidth / imgWidth) + 2;
+        const repeatY = Math.ceil(viewHeight / imgHeight) + 2;
+        
+        for (let i = 0; i < repeatX; i++) {
+            for (let j = 0; j < repeatY; j++) {
+                const x = startX + i * imgWidth;
+                const y = startY + j * imgHeight;
+                this.ctx.drawImage(this.backgroundImage, x, y, imgWidth, imgHeight);
+            }
+        }
+    }
+    this.ctx.restore();
+    
+    // 4. Рисуем фоновое изображение ЗА ПРЕДЕЛАМИ карты
+    if (this.backgroundImage) {
+        const originalImgWidth = this.backgroundImage.width;
+        const originalImgHeight = this.backgroundImage.height;
+        
+        const imgWidth = originalImgWidth * bgScale;
+        const imgHeight = originalImgHeight * bgScale;
+        
+        const viewLeft = this.nodeX - this.canvasWidth / 2 / this.viewZoom;
+        const viewTop = this.nodeY - this.canvasHeight / 2 / this.viewZoom;
+        const viewWidth = this.canvasWidth / this.viewZoom;
+        const viewHeight = this.canvasHeight / this.viewZoom;
+        
+        const startX = Math.floor(viewLeft / imgWidth) * imgWidth;
+        const startY = Math.floor(viewTop / imgHeight) * imgHeight;
+        
+        const repeatX = Math.ceil(viewWidth / imgWidth) + 2;
+        const repeatY = Math.ceil(viewHeight / imgHeight) + 2;
+        
+        for (let i = 0; i < repeatX; i++) {
+            for (let j = 0; j < repeatY; j++) {
+                const x = startX + i * imgWidth;
+                const y = startY + j * imgHeight;
+                this.ctx.drawImage(this.backgroundImage, x, y, imgWidth, imgHeight);
+            }
+        }
+    }
+    
+    // 5. Накладываем красный оттенок ТОЛЬКО за пределами карты
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(this.nodeX - this.canvasWidth / 2 / this.viewZoom, 
+                  this.nodeY - this.canvasHeight / 2 / this.viewZoom, 
+                  this.canvasWidth / this.viewZoom, 
+                  this.canvasHeight / this.viewZoom);
+    this.ctx.rect(mapLeft, mapTop, mapWidth, mapHeight);
+    this.ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+    this.ctx.fill("evenodd");
+    this.ctx.restore();
+    
+    // 6. Рисуем широкую красную границу карты
+    this.ctx.strokeStyle = "#FF0000";
+    this.ctx.lineWidth = 20;
+    this.ctx.strokeRect(mapLeft, mapTop, mapWidth, mapHeight);
+    
+    this.ctx.restore();
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+// Добавьте в конструктор класса Game:
+// this.backgroundImage = null;
+
+// И добавьте метод для загрузки фона:
+loadBackground() {
+    this.backgroundImage = new Image();
+    this.backgroundImage.src = "bg54.jpg";
+    this.backgroundImage.onload = () => {
+        console.log("Background loaded");
+    };
+    this.backgroundImage.onerror = () => {
+        console.error("Failed to load background image");
+    };
 }
+    
+    drawGameScene() {
+        var a, oldtime = Date.now();
+        ++this.cb;
+        this.timestamp = oldtime;
+        if (!window.fpsLastTime) {
+            window.fpsLastTime = oldtime;
+            window.fpsCount = 0;
+            window.currentFPS = 0;
+        }
+        window.fpsCount++;
+        if (oldtime - window.fpsLastTime >= 900) {
+            window.currentFPS = Math.round(window.fpsCount * 1000 / (oldtime - window.fpsLastTime));
+            window.fpsCount = 0;
+            window.fpsLastTime = oldtime;
+        }
+        
+        if (0 < this.playerCells.length) {
+            this.calcViewZoom();
+            var c = a = 0;
+            if (!this.mainCell || Date.now() - this.mainCellLockTime > 100) {
+                let oldest = this.playerCells[0];
+                for (let i = 1; i < this.playerCells.length; i++) {
+                    if (this.playerCells[i].id < oldest.id) {
+                        oldest = this.playerCells[i];
+                    }
+                }
+                this.mainCell = oldest;
+                this.mainCellLockTime = Date.now();
+            }
+            let mainCell = this.mainCell;
+            if (mainCell) {
+                mainCell.updatePos();
+                a = mainCell.x;
+                c = mainCell.y;
+            }
+            this.posX = a;
+            this.posY = c;
+            this.posSize = this.viewZoom;
+            this.nodeX = (this.nodeX + a) / 2;
+            this.nodeY = (this.nodeY + c) / 2;
+        } else {
+            this.nodeX = (29 * this.nodeX + this.posX) / 30;
+            this.nodeY = (29 * this.nodeY + this.posY) / 30;
+            this.viewZoom = (9 * this.viewZoom + this.posSize * this.viewRange()) / 10;
+        }
+        this.mouseCoordinateChange();
+        this.drawGrid();
+        this.ctx.save();
+        this.ctx.translate(this.canvasWidth / 2, this.canvasHeight / 2);
+        this.ctx.scale(this.viewZoom, this.viewZoom);
+        this.ctx.translate(-this.nodeX, -this.nodeY);
+        
+        for (let d = 0; d < this.nodelist.length; d++) this.nodelist[d].drawOneCell(this.ctx);
+        
+        this.ctx.restore();
+        this.lbCanvas && this.lbCanvas.width && this.ctx.drawImage(this.lbCanvas, this.canvasWidth - this.lbCanvas.width - 10, 10);
+        if (this.chatCanvas != null) this.ctx.drawImage(this.chatCanvas, 0, this.canvasHeight - this.chatCanvas.height - 50);
+        
+        this.userScore = Math.max(this.userScore, this.calcUserScore());
+        let displayText = '';
+        if (this.userScore > 0) {
+            displayText += 'Score: ' + ~~(this.userScore / 100);
+        }
+        if (window.currentFPS > 0) {
+            if (displayText) displayText += ' | ';
+            displayText += 'FPS: ' + window.currentFPS;
+        }
+		
+        if (this.ping > 0) {
+            if (displayText) displayText += '  |  ';
+            displayText += 'Ping: ' + this.ping;
+        }
+        if (displayText) {
+            if (null == this.scoreText) {
+                this.scoreText = new UText(24, '#FFFFFF');
+            }
+            this.scoreText.setValue(displayText);
+            let rendered = this.scoreText.render();
+            let textWidth = rendered.width;
+            this.ctx.globalAlpha = 0.2;
+            this.ctx.fillStyle = '#000000';
+            this.ctx.fillRect(10, 10, textWidth + 20, 34);
+            this.ctx.globalAlpha = 1;
+            this.ctx.drawImage(rendered, 15, 15);
+        }
+        var deltatime = Date.now() - oldtime;
+        deltatime > 1E3 / 60 ? this.z -= .01 : deltatime < 1E3 / 65 && (this.z += .01);
+        .4 > this.z && (this.z = .4);
+        1 < this.z && (this.z = 1);
+    }
+    
+    calcUserScore() {
+        for (var score = 0, i = 0; i < this.playerCells.length; i++) score += this.playerCells[i].nSize * this.playerCells[i].nSize;
+        return score;
+    }
+    
+    drawChatBoard() {
+        if (this.hideChat) {
+            this.chatCanvas = null;
+            return;
+        }
+        this.chatCanvas = document.createElement("canvas");
+        var ctx = this.chatCanvas.getContext("2d");
+        var scaleFactor = Math.min(Math.max(this.canvasWidth / 1200, 0.75), 1);
+        this.chatCanvas.width = 1E3 * scaleFactor;
+        this.chatCanvas.height = 550 * scaleFactor;
+        ctx.scale(scaleFactor, scaleFactor);
+        var nowtime = Date.now();
+        var lasttime = 0;
+        if (this.chatBoard.length >= 1)
+            lasttime = this.chatBoard[this.chatBoard.length - 1].time;
+        else return;
+        var deltat = nowtime - lasttime;
+        ctx.globalAlpha = 0.8 * Math.exp(-deltat / 25000);
+        var len = this.chatBoard.length;
+        var from = len - 15;
+        if (from < 0) from = 0;
+        for (var i = 0; i < (len - from); i++) {
+            var chatName = new UText(18, this.chatBoard[i + from].color);
+            chatName.setValue(this.chatBoard[i + from].name);
+            var width = chatName.getWidth();
+            var a = chatName.render();
+            ctx.drawImage(a, 15, this.chatCanvas.height / scaleFactor - 24 * (len - i - from));
+            var chatText = new UText(18, '#666666');
+            chatText.setValue(': ' + this.chatBoard[i + from].message);
+            a = chatText.render();
+            ctx.drawImage(a, 15 + width, this.chatCanvas.height / scaleFactor - 24 * (len - from - i));
+        }
+    }
+    
+    drawLeaderBoard() {
+        this.lbCanvas = null;
+        if (this.leaderBoard.length === 0) return;
+        this.lbCanvas = document.createElement("canvas");
+        var ctx = this.lbCanvas.getContext("2d");
+        var boardLength = 60;
+        var myRank = null;
+        for (var i = 0; i < this.leaderBoard.length; i++) {
+            if (this.playerCells.some(cell => cell.id === this.leaderBoard[i].id)) {
+                myRank = i + 1;
+                break;
+            }
+        }
+        var visible = this.leaderBoard.slice(0, 10);
+        if (myRank && myRank > 10) {
+            var myEntry = this.leaderBoard[myRank - 1];
+            visible.push({
+                name: this.playerCells[0]?.name,
+                id: this.playerCells[0]?.id ?? 0,
+                level: myEntry?.level ?? -1,
+                xp: myEntry?.xp ?? 0
+            });
+        }
+        boardLength += 24 * visible.length;
+        var scale = Math.min(0.22 * this.canvasHeight, Math.min(200, 0.3 * this.canvasWidth)) * 0.005;
+        this.lbCanvas.width = 200 * scale;
+        this.lbCanvas.height = boardLength * scale;
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, 200, boardLength);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "30px Ubuntu";
+        ctx.textAlign = "center";
+        ctx.fillText("Leaderboard", 100, 40);
+        ctx.textAlign = "left";
+        ctx.font = "20px Ubuntu";
+        for (var i = 0; i < visible.length; i++) {
+            var entry = visible[i];
+            var name = entry.name || "An unnamed cell";
+            if (!this.showName) name = "An unnamed cell";
+            var isMe = this.playerCells.some(cell => cell.id === entry.id);
+            if (isMe && this.playerCells[0]?.name) {
+                name = this.playerCells[0].name;
+            }
+            ctx.fillStyle = isMe ? "#FFAAAA" : "#FFFFFF";
+            var text = (!this.noRanking ? (i + 1) + ". " : "") + name;
+            if (isMe && myRank > 10 && i === visible.length - 1) {
+                text = myRank + ". " + name;
+            }
+            var w = ctx.measureText(text).width;
+            var x = (w > 190) ? 5 : 100 - w / 2;
+            ctx.fillText(text, x, 70 + 24 * i);
+        }
+    }
+    
+    normalizeFractlPart(n) {
+        return (n % (Math.PI * 2)) / (Math.PI * 2);
+    }
+    
+    updateNodes(reader) {
+        this.timestamp = Date.now();
+        this.ua = false;
+        for (let killedId; (killedId = reader.uint32());) {
+            const killer = this.nodes[reader.uint32()];
+            const killedNode = this.nodes[killedId];
+            if (killer && killedNode) {
+                killedNode.destroy();
+                killedNode.ox = killedNode.x;
+                killedNode.oy = killedNode.y;
+                killedNode.oSize = killedNode.size;
+                killedNode.nx = killer.x;
+                killedNode.ny = killer.y;
+                killedNode.nSize = killedNode.size;
+                killedNode.updateTime = this.timestamp;
+            }
+        }
+        for (let nodeid; (nodeid = reader.uint32());) {
+            const type = reader.uint8();
+            let posX = 0, posY = 0, size = 0, playerId = 0;
+            if (type === 1) {
+                posX = this.leftPos + (this.rightPos * 2) * this.normalizeFractlPart(nodeid);
+                posY = this.topPos + (this.bottomPos * 2) * this.normalizeFractlPart(nodeid * nodeid);
+            } else {
+                if (type === 0) playerId = reader.uint32();
+                posX = reader.int32();
+                posY = reader.int32();
+                size = reader.uint16();
+            }
+            const r = reader.uint8();
+            const g = reader.uint8();
+            const b = reader.uint8();
+            let color = ((r << 16) | (g << 8) | b).toString(16).padStart(6, "0");
+            color = `#${color}`;
+            const spiked = reader.uint8();
+            const name = reader.utf8();
+            let node = this.nodes[nodeid];
+            if (node) {
+                node.updatePos();
+                node.ox = node.x;
+                node.oy = node.y;
+                node.oSize = node.size;
+                node.color = color;
+            } else {
+                node = new Cell(nodeid, posX, posY, size, color, name);
+                this.nodes[nodeid] = node;
+                this.nodelist.push(node);
+                node.ka = posX;
+                node.la = posY;
+                if (playerId === this.ownerPlayerId) {
+                    document.getElementById("overlays").style.display = "none";
+                    this.playerCells.push(node);
+                    if (this.playerCells.length === 1) {
+                        this.nodeX = node.x;
+                        this.nodeY = node.y;
+                    }
+                }
+            }
+            node.nx = posX;
+            node.ny = posY;
+            node.setSize(size);
+            node.updateTime = this.timestamp;
+            if (name) node.setName(name);
+        }
+        while (reader.canRead) {
+            const node = this.nodes[reader.uint32()];
+            if (node) node.destroy();
+        }
+        this.nodelist.sort((a, b) => {
+            const aPlayer = game.playerCells.includes(a) ? 1 : 0;
+            const bPlayer = game.playerCells.includes(b) ? 1 : 0;
+            if (aPlayer !== bPlayer) return bPlayer - aPlayer;
+            return b.id - a.id;
+        });
+        if (this.ua && this.playerCells.length === 0) {
+            this.showOverlays(false);
+        }
+    }
+    
+    onUpdateXp(xp) {
+        console.log("XP updated to:", xp);
+    }
+}
+
+class BinaryReader {
+    constructor(view) {
+        this.view = view;
+        this.byteLength = view.byteLength;
+        this.offset = 0;
+    }
+    get canRead() {
+        return this.offset < this.byteLength;
+    }
+    uint8() {
+        return this.view.getUint8(this.offset++);
+    }
+    int8() {
+        return this.view.getInt8(this.offset++);
+    }
+    uint16() {
+        return this.view.getUint16((this.offset += 2) - 2, true);
+    }
+    int16() {
+        return this.view.getInt16((this.offset += 2) - 2, true);
+    }
+    uint32() {
+        return this.view.getUint32((this.offset += 4) - 4, true);
+    }
+    int32() {
+        return this.view.getInt32((this.offset += 4) - 4, true);
+    }
+    utf16() {
+        let str = "";
+        let char;
+        while (this.canRead && (char = this.uint16())) str += String.fromCharCode(char);
+        return str;
+    }
+    utf8() {
+        let text = "";
+        for (let byte1; byte1 = this.canRead && this.view.getUint8(this.offset++);) {
+            if (byte1 <= 0x7F)
+                text += String.fromCharCode(byte1);
+            else if (byte1 <= 0xDF)
+                text += String.fromCharCode(((byte1 & 0x1F) << 6) | (this.view.getUint8(this.offset++) & 0x3F));
+            else if (byte1 <= 0xEF)
+                text += String.fromCharCode(((byte1 & 0x0F) << 12) | ((this.view.getUint8(this.offset++) & 0x3F) << 6) | (this.view.getUint8(this.offset++) & 0x3F));
+            else {
+                let codePoint = ((byte1 & 0x07) << 18) | ((this.view.getUint8(this.offset++) & 0x3F) << 12) | ((this.view.getUint8(this.offset++) & 0x3F) << 6) | (this.view.getUint8(this.offset++) & 0x3F);
+                if (codePoint >= 0x10000) {
+                    codePoint -= 0x10000;
+                    text += String.fromCharCode(0xD800 | (codePoint >> 10), 0xDC00 | (codePoint & 0x3FF));
+                } else text += String.fromCharCode(codePoint);
+            }
+        }
+        return text;
+    }
+}
+
+class UText {
+    constructor(size, color, stroke, strokeColor) {
+        this._value = "";
+        this._color = color || "#000000";
+        this._stroke = !!stroke;
+        this._strokeColor = strokeColor || "#000000";
+        this._size = size || 16;
+        this._canvas = null;
+        this._ctx = null;
+        this._dirty = false;
+        this._scale = 1;
+    }
+    setSize(v) {
+        if (this._size !== v) {
+            this._size = v;
+            this._dirty = true;
+        }
+    }
+    setScale(v) {
+        if (this._scale !== v) {
+            this._scale = v;
+            this._dirty = true;
+        }
+    }
+    setStrokeColor(v) {
+        if (this._strokeColor !== v) {
+            this._strokeColor = v;
+            this._dirty = true;
+        }
+    }
+    setValue(v) {
+        if (v !== this._value) {
+            this._value = v;
+            this._dirty = true;
+        }
+    }
+    render() {
+        if (this._canvas == null) {
+            this._canvas = document.createElement("canvas");
+            this._ctx = this._canvas.getContext("2d");
+        }
+        if (this._dirty) {
+            this._dirty = false;
+            const ctx = this._ctx;
+            const value = this._value;
+            const scale = this._scale;
+            const fontsize = this._size;
+            const font = fontsize + "px Ubuntu";
+            ctx.font = font;
+            const h = ~~(0.2 * fontsize);
+            const h2 = h * 0.5;
+            const wd = fontsize * 0.1;
+            this._canvas.width = ctx.measureText(value).width * scale + 3;
+            this._canvas.height = (fontsize + h) * scale;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.font = font;
+            ctx.globalAlpha = 1;
+            ctx.lineWidth = wd;
+            ctx.strokeStyle = this._strokeColor;
+            ctx.fillStyle = this._color;
+            ctx.scale(scale, scale);
+            if (this._stroke) {
+                ctx.strokeText(value, 0, fontsize - h2);
+            }
+            ctx.fillText(value, 0, fontsize - h2);
+        }
+        return this._canvas;
+    }
+    getWidth() {
+        if (!this._canvas || !this._ctx) {
+            this._canvas = document.createElement("canvas");
+            this._ctx = this._canvas.getContext("2d");
+            this._ctx.font = this._size + "px Ubuntu";
+        }
+        return this._ctx.measureText(this._value).width + 6;
+    }
+}
+
+class Cell {
+    constructor(uid, ux, uy, usize, ucolor, uname) {
+        this.id = uid;
+        this.x = this.ox = ux;
+        this.y = this.oy = uy;
+        this.size = this.oSize = usize;
+        this.nx = 0;
+        this.ny = 0;
+        this.nSize = 0;
+        this.color = ucolor;
+        this.name = null;
+        this.nameCache = null;
+        this.sizeCache = null;
+        this.updateTime = 0;
+        this.drawTime = 0;
+        this.destroyed = false;
+        this.isEjected = false;
+        this.setName(uname);
+    }
+    destroy() {
+        const i = game.nodelist.indexOf(this);
+        if (i !== -1) game.nodelist.splice(i, 1);
+        delete game.nodes[this.id];
+        const p = game.playerCells.indexOf(this);
+        if (p !== -1) {
+            game.ua = true;
+            game.playerCells.splice(p, 1);
+        }
+        const s = game.nodesOnScreen.indexOf(this.id);
+        if (s !== -1) game.nodesOnScreen.splice(s, 1);
+        this.destroyed = true;
+    }
+    getNameSize() {
+        return Math.max(~~(0.3 * this.size), 24);
+    }
+    setName(name) {
+        this.name = name;
+        if (!this.nameCache) {
+            this.nameCache = new UText(this.getNameSize(), "#FFFFFF", true, "#000000");
+        }
+        this.nameCache.setSize(this.getNameSize());
+        this.nameCache.setValue(this.name);
+    }
+    setSize(size) {
+        this.nSize = size;
+        if (!this.sizeCache) {
+            this.sizeCache = new UText(this.getNameSize() * 0.5, "#FFFFFF", true, "#000000");
+        }
+        this.sizeCache.setSize(this.getNameSize() * 0.5);
+    }
+    updatePos() {
+        if (this.id === 0) return 1;
+        const progress = Math.min(1, Math.max(0, (game.timestamp - this.updateTime) / game.interpSpeed));
+        if (this.destroyed && progress >= 1) {
+            const i = game.Cells.indexOf(this);
+            if (i !== -1) game.Cells.splice(i, 1);
+        }
+        this.x = this.ox + (this.nx - this.ox) * progress;
+        this.y = this.oy + (this.ny - this.oy) * progress;
+        this.size = this.oSize + (this.nSize - this.oSize) * progress;
+        return progress;
+    }
+    shouldRender() {
+        if (this.id === 0) return true;
+        const margin = this.size + 40;
+        const left = game.nodeX - game.canvasWidth / 2 / game.viewZoom;
+        const right = game.nodeX + game.canvasWidth / 2 / game.viewZoom;
+        const top = game.nodeY - game.canvasHeight / 2 / game.viewZoom;
+        const bottom = game.nodeY + game.canvasHeight / 2 / game.viewZoom;
+        return !(
+            this.x + margin < left ||
+            this.y + margin < top ||
+            this.x - margin > right ||
+            this.y - margin > bottom
+        );
+    }
+    getStrokeColor() {
+        const r = (parseInt(this.color.substr(1, 2), 16) * 0.9) | 0;
+        const g = (parseInt(this.color.substr(3, 2), 16) * 0.9) | 0;
+        const b = (parseInt(this.color.substr(5, 2), 16) * 0.9) | 0;
+        return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+    }
+    
+drawOneCell(ctx) {
+    if (!this.shouldRender()) return;
+    ctx.save();
+    this.drawTime = game.timestamp;
+    this.updatePos();
+    let renderSize = this.size;
+    if (renderSize === 0) renderSize = 20;
+    
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, renderSize, 0, 2 * Math.PI);
+    ctx.closePath();
+
+    // ===== SKIN =====
+    let skinImg = null;
+    if (game.showSkin && this.name) {
+        skinImg = game.getSkinForNick(this.name);
+    }
+
+    if (skinImg) {
+        ctx.save();
+        ctx.clip();
+        ctx.drawImage(skinImg, this.x - renderSize, this.y - renderSize, renderSize * 2, renderSize * 2);
+        ctx.restore();
+    } else {
+        const isFood = this.size < 20 && !game.playerCells.includes(this);
+        //const isMedium = this.size >= 0 && this.size <= 35 && !game.playerCells.includes(this);
+        
+        if (isFood) {
+            ctx.fillStyle = "#ff8800";
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "rgba(255, 150, 0, 0.8)";
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            ctx.beginPath();
+            ctx.arc(this.x - renderSize * 0.2, this.y - renderSize * 0.2, renderSize * 0.25, 0, 2 * Math.PI);
+            ctx.fillStyle = "rgba(255, 255, 200, 0.8)";
+            ctx.fill();
+       /* } else if (isMedium) {
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = this.color;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            ctx.beginPath();
+            ctx.arc(this.x - renderSize * 0.2, this.y - renderSize * 0.2, renderSize * 0.25, 0, 2 * Math.PI);
+            ctx.fillStyle = this.color;
+            ctx.fill();*/
+        } else {
+            ctx.fillStyle = this.color;
+            ctx.fill();
+        }
+    }
+
+    const isPlayer = game.playerCells.includes(this);
+    const isMainCell = game.mainCell === this; // ТОЛЬКО главная клетка
+    
+    if (this.id !== 0) {
+        const x = ~~this.x;
+        const y = ~~this.y;
+        const nameSize = this.getNameSize();
+        const scale = Math.ceil(10 * game.viewZoom) * 0.1;
+        const invScale = 1 / scale;
+        
+        // ===== NAME - показываем имя ТОЛЬКО для главной клетки =====
+        if (isMainCell && this.name && this.nameCache) {
+            const cache = this.nameCache;
+            cache.setValue(this.name);
+            cache.setSize(nameSize);
+            cache.setScale(scale);
+            const canvas = cache.render();
+            const w = ~~(canvas.width * invScale);
+            const h = ~~(canvas.height * invScale);
+            ctx.drawImage(canvas, x - ~~(w / 2), y - ~~(h / 2), w, h);
+        }
+        
+        // ===== MASS - показываем массу ТОЛЬКО для главной клетки =====
+        if (isMainCell && (game.showMass || true)) {
+            const mass = ~~(this.size * this.size * 0.01);
+            const cache = this.sizeCache;
+            cache.setValue(mass);
+            cache.setScale(scale);
+            const canvas = cache.render();
+            const w = ~~(canvas.width * invScale);
+            const h = ~~(canvas.height * invScale);
+            // Позиционируем массу под именем
+            let gy;
+            if (this.name) {
+                gy = y + ~~(nameSize * 0.6);
+            } else {
+                gy = y + ~~(h * 0.5);
+            }
+            ctx.drawImage(canvas, x - ~~(w / 2), gy, w, h);
+        }
+    }
+    ctx.restore();
+}
+}
+
+const game = new Game();
+onload = game.gameLoop.bind(game);
+	</script> 
+</head>
+
+<body>
+<style>
+/* GLOBAL */
 
 body {
-  font-family: 'Inter', sans-serif;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  height: 100vh;
-  overflow: hidden;
-  position: relative;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
 }
 
-/* Главное меню */
-#user-interface {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 420px;
-  max-width: 90vw;
-  background: rgba(20, 20, 20, 0.85);
-  border-radius: var(--radius-lg);
-  padding: 50px 30px;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--border-primary);
-  z-index: 100;
+/* IDs */
+
+#overlays {
+    display:none; 
+    position: absolute; 
+    left: 0; 
+    right: 0; 
+    top: 0; 
+    bottom: 0; 
+    background-color: 
+    rgba(0,0,0,0.5); 
+    z-index: 200;
 }
 
-.title {
-  font-size: 56px;
-  font-weight: 700;
-  text-align: center;
-  margin-bottom: 50px;
-  background: linear-gradient(90deg, #ffffff, #e0e0e0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  letter-spacing: -2px;
+#title {
+    padding: 10px;
+}
+#captcha-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background-color:rgba(0, 0, 0, 0.5);display:flex;justify-content:center;align-items:center;z-index:9999;}
+
+#canvas {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
 }
 
-.input-group {
-  margin-bottom: 28px;
+#connecting {
+    display:none;
+    position: absolute; 
+    left: 0; 
+    right: 0; 
+    top: 0; 
+    bottom: 0; 
+    z-index: 100; 
+    background-color: rgba(0,0,0,0.5);
 }
 
-input#name {
-  width: 100%;
-  padding: 18px 20px;
-  border-radius: var(--radius-sm);
-  border: 2px solid var(--border-secondary);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-size: 17px;
-  outline: none;
-  transition: var(--transition);
+#nick {
+    width: 65%;
+    float: left;
 }
 
-input#name:focus {
-  border-color: var(--text-primary);
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15);
+#gamemode {
+    width: 33%;
+    float: right;
 }
 
-input#name::placeholder {
-  color: var(--text-muted);
+#helloDialog {
+    width: 400px;
+    background-color: #FFFFFF;
+    margin: 10px auto;
+    border-radius: 15px;
+    padding: 5px 15px 5px 15px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin-right: -50%;
+    -webkit-transform: translate(-50%, -50%);
+    -ms-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
 }
 
-.button-group {
-  display: flex;
-  gap: 14px;
-  margin-bottom: 34px;
+#chat_textbox {
+    -webkit-transition: all .5s ease-in-out;
+    -moz-transition: all .5s ease-in-out;
+    -o-transition: all .5s ease-in-out;
+    transition: all .5s ease-in-out;
+    position: absolute;
+    z-index: 1;
+    bottom: 10px;
+    background: rgba(0, 0, 0, .2);
+    border: 0px;
+    outline: none;
+    color: #FFF;
+    height: 30px;
+    text-indent: 12px;
+    left: 10px;
+    width: 300px;
 }
 
-.button {
-  flex: 1;
-  padding: 16px;
-  background: var(--bg-button);
-  border: 1px solid var(--border-secondary);
-  border-radius: var(--radius-sm);
-  text-align: center;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
+#chat_textbox:focus {
+    background: rgba(0, 0, 0, .5);
 }
 
-.button:hover {
-  background: rgba(70, 70, 70, 0.9);
-  border-color: var(--text-primary);
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-sm);
+#footer {
+    text-align: center;
+    margin-bottom: 10px;
+    margin-top: -10px;
 }
 
-.button:active {
-  transform: translateY(0);
+#play-btn {
+    width: 85%;
+    float: left;
 }
 
-.primary-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
+#settings-btn {
+    width: 13%;
+    float: right;
 }
 
-#play {
-  background: linear-gradient(135deg, #ffffff, #e0e0e0);
-  color: #000000;
-  font-size: 19px;
-  font-weight: 700;
-  border: none;
+#spectate-btn {
+    margin-top: -5px;
 }
 
-#play:hover {
-  background: linear-gradient(135deg, #f0f0f0, #ffffff);
-  box-shadow: 0 15px 30px rgba(255, 255, 255, 0.2);
+/* CLASSES */
+
+.checkbox label {
+    margin-right: 10px;
 }
 
-/* Общие HUD элементы */
-.hud-element {
-  position: absolute;
-  border-radius: var(--radius-sm);
-  padding: 12px 18px;
-  font-size: 15px;
-  font-weight: 600;
-  border: 1px solid var(--border-primary);
-  z-index: 1;
+.mb-10 {
+    margin-bottom: 10px;
 }
 
-#score   { top: 10px; left: 10px; z-index:1;}
-#fps     { top: 60px; left: 10px;z-index:1; }
-
-#leaderboard {
-  z-index: 1;
-  top: 10px;
-  right: 10px;
-  width: 200px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 20px;
-  scrollbar-width: none;
+.loader {
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 2s linear infinite;
 }
 
-/* Чат */
-.hud-chat {
-  z-index: 1;
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  width: 380px;
-  background: var(--bg-hud-strong);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-primary);
-  overflow: hidden;
+.center {
+    display: table;
+    margin: 0 auto;
 }
 
-#chat-content {
-  height: 220px;
-  padding: 18px;
-  overflow-y: auto;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--text-secondary);
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
+</style>
+    <div id="overlays">
+        <div id="helloDialog">
+                <div class="form-group">
+                    <h2 id="title" data-en="Slither.su">Slither.su</h2>
+                </div>
 
-#chat-field {
-  width: 100%;
-  padding: 16px 20px;
-  background: var(--bg-input);
-  border: none;
-  border-top: 1px solid var(--border-primary);
-  color: var(--text-primary);
-  font-size: 15px;
-  outline: none;
-}
+                <div class="form-group">
+                    <input id="nick" class="form-control save" placeholder="Ник" data-en-placeholder="Nick" maxlength="16"/>
+                    <select id="gamemode" class="form-control" onchange="setServer($(this).val());" required>
+                        <option value="ffa.agar.su:6009">FFA #1</option>
+                    </select>
+                    <br clear="both" />
+                </div>
 
-#chat-field::placeholder {
-  color: var(--text-placeholder);
-}
+                <div class="form-group">
 
-.hud-message { color: white; }
+                    <button type="submit" id="play-btn" onclick="setNick(document.getElementById('nick').value); return false;" class="btn btn-play btn-primary btn-needs-server" data-en="Play">Играть</button>
+                    <button onclick="
+    var s = document.getElementById('settings');
+    var i = document.getElementById('instructions');
+    if (s.style.display === 'none' || s.style.display === '') {
+        s.style.display = 'block';
+        i.style.display = 'none';
+    } else {
+        s.style.display = 'none';
+        i.style.display = 'block';
+    }"
+    class="btn btn-info btn-settings" 
+    id="settings-btn">
+    <i class="glyphicon glyphicon-cog"></i>
+</button>
+                    <br clear="both" />
+                </div>
 
-/* Миникарта */
-#minimap-grid {
-  position: absolute;
-  width: 200px;
-  height: 200px;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(5, 1fr);
-  pointer-events: none;
-  opacity: 0.5;
-  font-size: 11px;
-  font-weight: 700;
-  bottom: 10px;
-  right: 10px;
-  z-index: 1;
-}
+                <div id="settings" class="checkbox" style="display:none;">
+                    <div class="form-group" id="mainform">
+<button type="button" id="spectate-btn" onclick="setSpect(); return false;" style="width: 100%" class="btn btn-warning btn-spectate btn-needs-server" data-en="Spectate">Наблюдение</button>
+                        <br clear="both" />
+                    </div>
+<div style="margin: 6px;">
+    <label>
+        <input type="checkbox" class="save" data-box-id="1" onchange="setSkins(this.checked);" data-en="No skins">Без скинов
+    </label>
+    <label>
+        <input type="checkbox" class="save" data-box-id="2" onchange="setNames(!this.checked);" data-en="No names">Без ников
+    </label>
+    <label>
+        <input type="checkbox" class="save" data-box-id="3" onchange="setDarkTheme(this.checked);" data-en="Dark Theme">Тёмная тема
+    </label>
+    <label>
+        <input type="checkbox" class="save" data-box-id="4" onchange="setColors(this.checked);" data-en="No colors">Без цветов
+    </label>
+    <label>
+        <input type="checkbox" class="save" data-box-id="5" onchange="setShowMass(this.checked);" data-en="Show mass" checked>Показывать массу
+    </label>
+    <label>
+        <input type="checkbox" class="save" data-box-id="7" onchange="setChatHide(this.checked);" data-en="Close chat">Закрыть чат
+    </label>
+<div>
+    <label>
+        Speed: <b id="speedLabel">2 (Normal)</b>
+    </label>
 
-.cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-minimap);
-  border: 0.5px solid rgba(255, 255, 255, 0.08);
-}
+    <input 
+        type="range"
+        id="speedSlider"
+        min="1"
+        max="3"
+        step="1"
+        value="2"
+        oninput="setSpeedStage(this.value)"
+        style="width:100%;"
+    >
 
-.hud-minimap {
-  position: absolute;
-}
-
-/* Игровой канвас */
-#view {
-  position: absolute;
-  inset: 0;
-  background: var(--bg-primary);
-}
-
-/* Модальные окна */
-#modals-container {
-  display: none;
-  position: fixed; /* Изменено на fixed для overlay над всем экраном */
-  inset: 0;
-  z-index: 200;
-  justify-content: center;
-  align-items: center;
-  overflow: auto; /* Если контент большой */
-}
-
-.modal-background {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6); /* Полупрозрачный фон */
-}
-
-.modal {
-  position: relative;
-  background: var(--bg-hud-strong); /* Темный фон как в HUD */
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-primary);
-  padding: 20px;
-  box-shadow: var(--shadow-lg);
-  min-width: 200px; /* Минимальная ширина из вашего кода */
-  max-width: 90vw;
-  z-index: 201;
-  animation: modalFadeIn 0.3s ease; /* Анимация появления */
-  height: 100%;
-}
-
-@keyframes modalFadeIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.anim {
-  /* Дополнительный класс для анимаций, если нужно */
-}
-
-.modal-header {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 10px;
-}
-
-.modal-close {
-  cursor: pointer;
-  font-size: 24px;
-  color: var(--text-muted);
-  transition: var(--transition);
-}
-
-.modal-close:hover {
-  color: var(--text-primary);
-}
-
-/* Контент настроек */
-.modal-settings-content {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.modal-settings-tile {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 16px;
-  color: var(--text-secondary);
-}
-
-.modal-settings-tile input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--text-primary); /* Цвет чекбокса */
-  cursor: pointer;
-}
-
-/* Аналогично для серверов (если нужно) */
-.modal-servers-content {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.modal-servers-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-}
-
-.round {
-  background: var(--bg-button);
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  text-align: center;
-}
-  </style>
-</head>
-<body>
-  <!-- Главное меню -->
-  <div id="user-interface" class="main-container">
-    <div class="title">Agar.su</div>
-    <div class="input-group">
-      <input type="text" id="name" placeholder="Введите ваше имя" />
+    <div style="display:flex; justify-content:space-between; font-size:12px;">
+        <span>1</span>
+        <span>2</span>
+        <span>3</span>
     </div>
-    <div class="button-group">
-      <div id="settings" class="button">Настройки</div>
-      <div id="servers" class="button">Серверы</div>
+</div>
+
+
+
+</div>
+                </div>
+
+            <div id="instructions">
+                <hr/>
+                <center>
+<span class="text-muted"
+data-en="Move your mouse to control your cell<br>Press <b>Space</b> to boost<br>Press">
+Двигайте мышь чтобы управлять клеткой<br>
+Нажмите <b>Space</b> чтобы ускориться
+</span>
+                </center>
+            </div>
+
+            <hr />
+            <div id="footer">
+                <a target="_blank" href="https://t.me/agarsu" class="text-muted">Telegram: @agarsu</a>
+            </div>
+<footer id="footer"><a target="_blank" href="https://agar.su/privacy.html" data-en="privacy">политика</a><a target="_blank" href="https://agar.su/rules.html" data-en="rules"> · правила · </a><a target="_blank" href="https://agar.su/offer.html" data-en="offer">оферта</a></footer>
+        </div>
     </div>
-    <div class="primary-buttons">
-      <div id="play" class="button">Играть</div>
-      <div id="spectate" class="button">Наблюдать</div>
+
+    <div id="connecting">
+        <div style="width: 350px; background-color: #FFFFFF; margin: 100px auto; border-radius: 15px; padding: 5px 15px 5px 15px;">
+<h2 data-en="Connecting">Подключение</h2>
+<p data-en="If you cannot connect to servers, send message telegram">Если не удаётся подключиться к серверу — напшии в телеграмм</p>
+        </div>
     </div>
-    <div id="modals-container"></div>
-  </div>
 
-  <!-- HUD элементы -->
-  <div id="score" class="hud-element">Score: 0</div>
-  <div id="fps" class="hud-element">FPS: --</div>
-  <div id="leaderboard" class="hud-element"></div>
+    <canvas id="canvas"></canvas>
+    <input type="text" id="chat_textbox" placeholder="Нажмите Enter для чата" data-en-placeholder="Press Enter to chat" maxlength="200"/>
+	<script>
+(function () {
 
-  <!-- Чат -->
-  <div class="hud-chat">
-    <div id="chat-content"></div>
-    <input id="chat-field" type="text" placeholder="Напишите здесь…" />
-  </div>
+    var lang = (navigator.language || navigator.userLanguage || "en").toLowerCase();
+    var isEnglish = !lang.startsWith("ru");
+    if (!isEnglish) return;
 
-  <!-- Миникарта -->
-  <div id="minimap-grid">
-    <canvas id="minimap-view" width="260" height="260" class="hud-minimap"></canvas>
-    <div class="cell">A1</div><div class="cell">A2</div><div class="cell">A3</div><div class="cell">A4</div><div class="cell">A5</div>
-    <div class="cell">B1</div><div class="cell">B2</div><div class="cell">B3</div><div class="cell">B4</div><div class="cell">B5</div>
-    <div class="cell">C1</div><div class="cell">C2</div><div class="cell">C3</div><div class="cell">C4</div><div class="cell">C5</div>
-    <div class="cell">D1</div><div class="cell">D2</div><div class="cell">D3</div><div class="cell">D4</div><div class="cell">D5</div>
-    <div class="cell">E1</div><div class="cell">E2</div><div class="cell">E3</div><div class="cell">E4</div><div class="cell">E5</div>
-  </div>
+    document.querySelectorAll("[data-en]").forEach(el=>{
+        el.innerHTML = el.getAttribute("data-en");
+    });
 
-  <!-- Игровой канвас -->
-  <canvas id="view"></canvas>
+    document.querySelectorAll("[data-en-placeholder]").forEach(el=>{
+        el.placeholder = el.getAttribute("data-en-placeholder");
+    });
 
-  <script src="./main.js?11"></script>
+    document.querySelectorAll("[data-en-content]").forEach(el=>{
+        el.setAttribute("content", el.getAttribute("data-en-content"));
+    });
+
+})();
+</script>
 </body>
 </html>
