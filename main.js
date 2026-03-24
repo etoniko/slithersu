@@ -1,2129 +1,1371 @@
-(function (global) {
-    const servers = {
-        "ffa.agar.su:6009": { name: "FFA - Moscow" },
-        "ffa.agar.su:6002": { name: "MegaSplit" },
-        "ffa.agar.su:6003": { name: "Experemental" },
-        "ffa.agar.su:6004": { name: "pvp1: 1x1 ffa 1k" },
-        "ffa.agar.su:6005": { name: "pvp2: 2x2 ms 1k" },
-        "ffa.agar.su:6006": { name: "Tournament" }
-    };
-
-    Array.prototype.remove = function (a) {
-        const i = this.indexOf(a);
-        return i !== -1 && this.splice(i, 1);
-    };
-    const COLORS = [
-        "#FF0000", // красный
-        "#FF8000", // оранжевый
-        "#FFFF00", // жёлтый
-        "#80FF00", // салатовый
-        "#00FF00", // зелёный
-        "#00FF80", // бирюзовый
-        "#00FFFF", // голубой
-        "#0080FF", // синий
-        "#0000FF", // тёмно-синий
-        "#8000FF", // фиолетовый
-        "#FF00FF", // розовый
-        "#FF0080", // малиновый
-        "#FFFFFF", // белый
-        "#C0C0C0", // серый
-        "#808080", // тёмно-серый
-        "#000000"  // чёрный
-    ];
-
-    // Преобразуем в нижний регистр без # для удобного сравнения
-    const COLOR_MAP = new Map();
-    COLORS.forEach((hex, id) => {
-        COLOR_MAP.set(hex.toLowerCase(), id);
-        COLOR_MAP.set(hex.replace("#", "").toLowerCase(), id);
-    });
-
-    /**
-     * Возвращает ID цвета (0–15) по значению из localStorage
-     * Если цвет не найден — возвращает 0 (красный)
-     */
-    function getColorId(storedColor) {
-        if (!storedColor) return 0;
-        const key = storedColor.toString().toLowerCase().trim();
-        return COLOR_MAP.has(key) ? COLOR_MAP.get(key) : 0;
+class Game {
+    constructor() {
+        // Соединение
+        this.CONNECTION_URL = "";
+        this.currentWebSocketUrl = null;
+        this.ws = null;
+        this.Delay = 500;
+        this.useHttps = location.protocol === "https:";
+        // Canvas и отрисовка
+        this.canvas = null;
+        this.ctx = null;
+        this.canvasWidth = 0;
+        this.canvasHeight = 0;
+        this.viewZoom = 1;
+        this.zoom = 1;
+        this.nodeX = 0;
+        this.nodeY = 0;
+        this.posX = 0;
+        this.posY = 0;
+		this.mainCell = null;
+        this.mainCellLockTime = 0;
+        this.posSize = 1;
+        // Границы карты
+        this.leftPos = 0;
+        this.topPos = 0;
+        this.rightPos = 0;
+        this.bottomPos = 0;
+        this.ownerPlayerId = -1;
+        // Игрок и клетки
+        this.playerCells = [];
+        this.nodes = {};
+        this.nodelist = [];
+        this.Cells = []; // уничтоженные клетки (анимация)
+        this.nodesOnScreen = [];
+        // Интерфейс и HUD
+        this.leaderBoard = [];
+        this.chatBoard = [];
+        this.lbCanvas = null;
+        this.chatCanvas = null;
+        this.scoreText = null;
+        this.userScore = 0;
+        this.userNickName = null;
+		this.skinMap = {};     // nick -> codeid
+        this.skinCache = {};   // codeid -> Image
+        this.skinLoading = {}; // чтобы не грузить 100 раз
+        this.hideChat = false;
+        this.showDarkTheme = false;
+        this.showName = true;
+        this.showSkin = true;
+        this.showMass = true;
+		this.interpSpeed = 120; // скорость интерполяции (по умолчанию середина)
+        this.noRanking = false;
+        // Мышь и ввод
+        this.rawMouseX = 0;
+        this.rawMouseY = 0;
+        this.X = -1;
+        this.Y = -1;
+        this.oldX = -1;
+        this.oldY = -1;
+        // Производительность и время
+        this.timestamp = 0;
+        this.cb = 0; // счётчик кадров
+        this.fpsLastTime = 0;
+        this.fpsCount = 0;
+        this.currentFPS = 0;
+		this.ping = 0;    
+        this.pingstamp = 0;
+        // Управление
+        this.isTyping = false;
+        this.spacePressed = false;
+        this.wPressed = false;
+        this.hasOverlay = true;
+        // Капча
+        this.captchaId = null;
+        //прочее
+        this.z = 1;
+        this.cellColors = [];
+        this.teamColor = ["#333333", "#FF3333", "#33FF33", "#3333FF"];
+        this.ma = false;
+        this.mainCanvas = null;
+        this.nCanvas = null;
+        this.mapWidth = 0;
+        this.mapHeight = 0;
+        // Эффекты частиц
+        this.particles = [];
+        // Анимация времени
+        this.time = 0;
+        
+        window.setNick = this.setNick.bind(this);
+        window.setSpect = this.setSpect.bind(this);
+        window.setServer = this.setServer.bind(this);
+        window.setSkins = (arg) => { this.showSkin = !arg; };
+        window.setNames = (arg) => { this.showName = arg; };
+        window.setDarkTheme = (arg) => { this.showDarkTheme = arg; };
+        window.setShowMass = (arg) => { this.showMass = arg; };
+        window.setChatHide = (arg) => { this.hideChat = arg; };
+		window.setSpeedStage = (stage) => {
+            stage = parseInt(stage);
+            let speed = 120;
+            let label = "Normal";
+            if (stage === 1) { speed = 240; label = "Slow"; }
+            if (stage === 2) { speed = 120; label = "Normal"; }
+            if (stage === 3) { speed = 60; label = "Fast"; }
+            game.interpSpeed = speed;
+            document.getElementById("speedLabel").innerText = stage + " (" + label + ")";
+        };
     }
-
-    // === Дополнительно: сохранение выбранного цвета при смене в настройках ===
-    function setSelectedColor(hex) {
-        if (hex && hex.startsWith("#")) {
-            localStorage.setItem("selectedColor", hex.toUpperCase());
-        }
-    }
-
-
-    class Cell {
-        static NAME_CACHE = new Map()
-        static MASS_POOL = new Array()
-        static SPRITE //pixi.sprite set later
-
-
-        constructor(core, id, x, y, r, sprite, name, color) {
-            this.core = core
-            this.sprite = sprite
-            this.id = id
-            this.x = this.nx = this.ox = x
-            this.y = this.ny = this.oy = y
-            this.r = this.nr = this.or = r
-            this._color = color
-            this._name = name
-            this.updated = Date.now()
-            this.hasChanged = true
-            this.skinSprite = null;
-            this.skinMask = null;
-            // Кэш для оптимизации обновлений
-            this._lastScale = r / 256;
-            this._lastZIndex = r * 2;
-            this._visible = true; // для frustum culling
-
-            this.sprite.scale.set(r / 256);
-        }
-
-        _getNameTexture(name) {
-            const MAX_WIDTH = 512; // максимально допустимая ширина имени
-            let fontSize = 100; // базовый размер шрифта
-
-            // Создаём временный текст для измерения ширины
-            let text = new PIXI.Text(name, {
-                fontFamily: 'Ubuntu, Arial, sans-serif',
-                fontWeight: '700',
-                fontSize: fontSize,
-                lineJoin: "round",
-                fill: "white",
-                stroke: "black",
-                strokeThickness: 10
+	
+	async loadSkinList() {
+        try {
+            const res = await fetch("https://api.agar.su/skinlist.txt");
+            const text = await res.text();
+            text.split("\n").forEach(line => {
+                line = line.trim();
+                if (!line) return;
+                const [nick, code] = line.split(":");
+                if (!nick || !code) return;
+                this.skinMap[nick.toLowerCase()] = code.trim();
             });
-
-            // Если текст слишком широкий, уменьшаем шрифт пропорционально
-            const maxWidth = MAX_WIDTH;
-            if (text.width > maxWidth) {
-                fontSize = Math.max(20, (maxWidth / text.width) * fontSize);
-                text.style.fontSize = fontSize;
-            }
-
-            // Генерация текстуры
-            const texture = this.core.app.renderer.generateTexture(text, {
-                resolution: 3,
-                scaleMode: PIXI.SCALE_MODES.LINEAR
-            });
-
-            texture.baseTexture.mipmapMode = PIXI.MIPMAP_MODES.ON;
-            Cell.NAME_CACHE.set(name, texture);
-            text.destroy();
-
-            return texture;
-        }
-
-
-        _getMassInstance() {
-            const mass = Cell.MASS_POOL.shift();
-            if (mass) return mass;
-            return new PIXI.Text("", {
-                fontFamily: 'Ubuntu, Arial, sans-serif',
-                fontWeight: '700',
-                fontSize: 50,
-                fill: "white",
-                stroke: "black",
-                strokeThickness: 6,
-                lineJoin: "round"
-            });
-        }
-
-        _setNameSprite(value) {
-            let nameSprite;
-            if (Cell.NAME_CACHE.has(value)) {
-                nameSprite = new PIXI.Sprite(Cell.NAME_CACHE.get(value));
-            } else {
-                nameSprite = new PIXI.Sprite(this._getNameTexture(value));
-            }
-            if (this.nameSprite) this.nameSprite.destroy();
-            nameSprite.anchor.set(0.5);
-            this.sprite.addChild(nameSprite);
-            this.nameSprite = nameSprite;
-        }
-
-        set name(value) {
-            if (!this.hasChanged) return;
-
-            // Имя
-            if (!this.core.settings.names && this.nameSprite) {
-                this.nameSprite.destroy();
-                this.nameSprite = null;
-            } else if (this.core.settings.names) {
-                this._setNameSprite(value);
-            }
-
-            // Скины
-            if (this.core?.skins) {
-                if (this.core.settings.skins) {
-                    this.core.skins.applyToCell(this, value);
-                } else {
-                    // Настройка выключена — убедимся, что ничего не висит
-                    if (this.skinSprite) { this.skinSprite.destroy({ children: true }); this.skinSprite = null; }
-                    if (this.skinMask) { this.skinMask.destroy(); this.skinMask = null; }
-                }
-            }
-
-            this._name = value;
-        }
-
-
-        get name() {
-            return this._name
-        }
-
-        set color(value) {
-            if (!this.hasChanged) return
-            this._color = value
-            this.sprite.tint = value
-        }
-
-        get color() {
-            return this._color
-        }
-
-        get mass() {
-            return this._mass
-        }
-
-        set mass(value) {
-            if (this.massSprite) this.massSprite.text = value
-            this._mass = value
-            if (!this.hasChanged) return
-            if (this.massSprite && !this.core.settings.mass) {
-                this.massSprite.destroy()
-                this.massSprite = null
-            } else if (this.name && !this.massSprite && this.core.settings.mass) {
-                this.massSprite = this._getMassInstance()
-                this.massSprite.anchor.set(0.5, -0.9)
-                this.sprite.addChild(this.massSprite)
-            }
-        }
-
-
-        update(time) {
-            const delta = Math.max(Math.min((time - this.updated) / 80, 1), 0)
-
-            if (this.hasChanged) {
-                this.color = this.color
-                this.mass = this.mass
-                this.name = this.name
-                this.hasChanged = false
-            }
-
-            this.x = this.ox + (this.nx - this.ox) * delta
-            this.y = this.oy + (this.ny - this.oy) * delta
-            this.r = this.or + (this.nr - this.or) * delta
-
-            this.mass = Math.round(this.r * this.r / 100)
-
-            // Оптимизация: обновляем позицию только если изменилась
-            if (this.sprite.x !== this.x || this.sprite.y !== this.y) {
-                this.sprite.x = this.x;
-                this.sprite.y = this.y;
-            }
-
-            // Оптимизация: обновляем масштаб только если изменился (кэшируем предыдущее значение)
-            const s = this.r / 256; // 512px база → r/256
-            if (this._lastScale !== s) {
-                this.sprite.scale.set(s);
-                this._lastScale = s;
-            }
-
-            // Оптимизация: zIndex обновляем только если радиус изменился значительно
-            // const newZIndex = this.r * 2;
-            // if (this._lastZIndex !== newZIndex) {
-            //     this.sprite.zIndex = newZIndex;
-            //     this._lastZIndex = newZIndex;
-            // }
-
-            const newZIndex =  this.core.app.ownedCells.length - this.core.app.ownedCells.indexOf(this.id);
-
-            if (this._lastZIndex !== newZIndex) {
-                this.sprite.zIndex = newZIndex;
-                this._lastZIndex = newZIndex;
-            }
-        }
-
-
-        destroy(killerId) {
-            this.core.app.cellsByID.delete(this.id);
-            if (this.core.app.ownedCells.remove(this.id) && this.core.app.ownedCells.length === 0) this.core.ui.setPanelState(true)
-            this.destroyed = true;
-            this.dead = this.core.net.now;
-
-            if (killerId && !this.diedBy) {
-                this.diedBy = killerId;
-                this.updated = this.core.net.now;
-            }
-
-            this.core.app.cells.remove(this)
-            this.sprite.destroy({ children: true })
-        }
-
-    }
-
-
-
-    class ModalSystem {
-        constructor() {
-            this.modals = new Map()
-            this.count = 0
-        }
-
-        refresh() {
-            const container = document.getElementById("modals-container")
-            container.style.display = "none"
-            container.innerHTML = ""
-            this.modals.forEach(modal => {
-                container.style.display = "flex"
-                const modalStr = `
-            <div class="modal-background"></div>
-            <div class="modal anim">
-                <div class="modal-header">
-                    <div id="${modal.id}-close" class="modal-close">&#10539;</div>
-                </div>
-                ${modal.content}
-            </div>`
-                container.insertAdjacentHTML('beforeend', modalStr)
-                document.getElementById(`${modal.id}-close`).addEventListener("click", () => { this.removeModal(modal.id) })
-            })
-        }
-
-        addModal(width, height, content) {
-            this.modals.set(++this.count, { id: this.count, width, height, content })
-            this.refresh()
-            return this.count
-        }
-
-        removeModal(id) {
-            this.modals.delete(id)
-            this.refresh()
+            console.log("Skin list loaded:", Object.keys(this.skinMap).length);
+        } catch (e) {
+            console.error("Skin list load error", e);
         }
     }
 
-
-    class Settings {
-        constructor(core) {
-            this.core = core
-            this._settings = this.core.store.settings
-        }
-
-        get rawSettings() {
-            return this._settings
-        }
-        get skins() {
-            return this.rawSettings.skins;
-        }
-
-        set skins(value) {
-            this.rawSettings.skins = value;
-
-            // Применить сразу ко всем клеткам
-            for (const cell of this.core.app.cells) {
-                if (!value) {
-                    // Выключили — убрать спрайт и маску
-                    if (cell.skinSprite) { cell.skinSprite.destroy({ children: true }); cell.skinSprite = null; }
-                    if (cell.skinMask) { cell.skinMask.destroy(); cell.skinMask = null; }
-                } else {
-                    // Включили — принудительно переустановить имя, чтобы SkinManager навесил скин
-                    cell.hasChanged = true;
-                    cell.name = cell.name;
-                }
-            }
-        }
-
-
-
-        get names() {
-            return this.rawSettings.names
-        }
-
-        set names(value) {
-            for (const cell of this.core.app.cells) cell.hasChanged = true
-            this.rawSettings.names = value
-        }
-
-        get mass() {
-            return this.rawSettings.mass
-        }
-
-        set mass(value) {
-            for (const cell of this.core.app.cells) cell.hasChanged = true
-            this.rawSettings.mass = value
-        }
-
-        get background() {
-            return this.rawSettings.background
-        }
-
-        set background(value) {
-            if (this.core.app.backgroundSprite) {
-                this.core.app.backgroundSprite.visible = value;
-            }
-            this.rawSettings.background = value;
-        }
-
-
-        get sectors() {
-            return this.rawSettings.sectors
-        }
-
-        set sectors(value) {
-            this.core.app.sectorContainer.visible = value
-            this.rawSettings.sectors = value
+    getSkinForNick(nick) {
+        if (!nick) return null;
+        const code = this.skinMap[nick.toLowerCase()];
+        if (!code) return null;
+        if (this.skinCache[code]) return this.skinCache[code];
+        if (this.skinLoading[code]) return null;
+        const img = new Image();
+        img.src = "https://api.agar.su/skins/" + code + ".png";
+        this.skinLoading[code] = true;
+        img.onload = () => {
+            this.skinCache[code] = img;
+            delete this.skinLoading[code];
+        };
+        img.onerror = () => {
+            delete this.skinLoading[code];
+        };
+        return null;
+    }
+    
+    getXp(level) {
+        return ~~(100 * (level ** 2 / 2));
+    }
+    getLevel(xp) {
+        return ~~((xp / 100 * 2) ** 0.5);
+    }
+    setNick(arg) {
+        this.hideOverlays();
+        this.userNickName = arg + "#";
+        this.sendNickName();
+        this.userScore = 0;
+    }
+    setSpect() {
+        this.userNickName = null;
+        this.sendUint8(1);
+        this.hideOverlays();
+    }
+    setServer(arg) {
+        if (arg !== this.CONNECTION_URL) {
+            this.CONNECTION_URL = arg;
+            this.showCaptcha();
         }
     }
-
-
-
-    class Storage {
-        get settings() {
-            const defaultSettings = {
-                skins: true,
-                names: true,
-                mass: true,
-                background: true,
-                sectors: false
-            };
-
-            let parsedSettings = {};
-            try {
-                const raw = localStorage.getItem("cigar3-settings");
-                if (raw) parsedSettings = JSON.parse(raw) || {};
-            } catch (_) {
-                parsedSettings = {};
-            }
-
-            // Всегда добавляем недостающие ключи и сохраняем обратно
-            const normalized = { ...defaultSettings, ...parsedSettings };
-            localStorage.setItem("cigar3-settings", JSON.stringify(normalized));
-            return normalized;
-        }
-
-        set settings(settings) {
-            localStorage.setItem("cigar3-settings", JSON.stringify(settings))
-        }
-
-        get name() {
-            return localStorage.getItem("cigar3-name")
-        }
-
-        set name(name) {
-            localStorage.setItem("cigar3-name", name)
-        }
-
+    onCaptchaSuccess(token) {
+        this.showConnecting(token);
     }
-
-
-    const prepareData = a => new DataView(new ArrayBuffer(a));
-
-
-    class BinaryReader {
-        constructor(view) {
-            this.view = view;
-            this.byteLength = view.byteLength;
+    renderCaptcha() {
+        if (this.captchaId !== null) {
+            document.getElementById('captcha-overlay').style.display = '';
+            turnstile.reset(this.captchaId);
+            return;
         }
-        get canRead() {
-            return this.offset < this.byteLength;
+        const overlay = document.createElement("div");
+        overlay.id = "captcha-overlay";
+        const container = document.createElement("div");
+        container.id = "captcha-container";
+        overlay.appendChild(container);
+        document.body.prepend(overlay);
+        this.captchaId = turnstile.render(container, {
+            sitekey: "0x4AAAAAAA0keHJ56_KNR0MU",
+            callback: this.onCaptchaSuccess.bind(this)
+        });
+    }
+    showCaptcha() {
+        if (window.turnstile) return this.renderCaptcha();
+        const node = document.createElement('script');
+        node.setAttribute('src', 'https://challenges.cloudflare.com/turnstile/v0/api.js');
+        node.setAttribute('async', 'async');
+        node.setAttribute('defer', 'defer');
+        node.onload = () => {
+            this.renderCaptcha();
+        };
+        node.onerror = () => {
+            alert("Не удалось загрузить библиотеку Captcha. Попробуйте обновить браузер");
+        };
+        document.head.appendChild(node);
+    }
+    disableCaptcha() {
+        const captchaOverlay = document.getElementById('captcha-overlay');
+        if (captchaOverlay) captchaOverlay.remove();
+        const scripts = document.querySelectorAll('script[src*="challenges.cloudflare.com/turnstile"]');
+        scripts.forEach(s => s.remove());
+        if (window.turnstile) delete window.turnstile;
+        this.captchaId = null;
+        console.log("Captcha полностью отключена до перезагрузки страницы или соединение нового сервера");
+    }
+    
+    gameLoop() {
+        this.ma = true;
+        document.getElementById("canvas").focus();
+        this.isTyping = false;
+        let chattxt;
+        this.mainCanvas = this.nCanvas = document.getElementById("canvas");
+        this.ctx = this.mainCanvas.getContext("2d");
+		this.loadSkinList();
+        this.mainCanvas.onmousemove = (event) => {
+            this.rawMouseX = event.clientX;
+            this.rawMouseY = event.clientY;
+            this.mouseCoordinateChange();
+        };
+        const updateMouseAim = () => {
+            let x = this.X < this.rightPos ? this.X : this.rightPos;
+            let y = this.Y < this.bottomPos ? this.Y : this.bottomPos;
+            x = -this.rightPos > x ? -this.rightPos : x;
+            y = -this.bottomPos > y ? -this.bottomPos : y;
+            this.posX = x;
+            this.posY = y;
+        };
+        this.mainCanvas.addEventListener("mousedown", () => {
+            if (!this.playerCells.length) {
+                updateMouseAim();
+                this.sendUint8(1);
+            }
+        });
+        this.mainCanvas.onmouseup = function() {};
+        if (/firefox/i.test(navigator.userAgent)) {
+            document.addEventListener("DOMMouseScroll", this.handleWheel.bind(this), false);
+        } else {
+            document.body.onmousewheel = this.handleWheel.bind(this);
         }
-        uint8() {
-            return this.view.getUint8(this.offset++);
-        }
-        int8() {
-            return this.view.getInt8(this.offset++);
-        }
-        uint16() {
-            return this.view.getUint16((this.offset += 2) - 2, true);
-        }
-        int16() {
-            return this.view.getInt16((this.offset += 2) - 2, true);
-        }
-        uint32() {
-            return this.view.getUint32((this.offset += 4) - 4, true);
-        }
-        int32() {
-            return this.view.getInt32((this.offset += 4) - 4, true);
-        }
-        utf16() {
-            let str = "";
-            let char;
-            while (this.canRead && (char = this.uint16())) str += String.fromCharCode(char);
-            return str;
-        }
-        utf8() {
-            let text = "";
-
-            for (let byte1; byte1 = this.canRead && this.view.getUint8(this.offset++);) {
-                if (byte1 <= 0x7F)
-                    text += String.fromCharCode(byte1);
-                else if (byte1 <= 0xDF)
-                    text += String.fromCharCode(((byte1 & 0x1F) << 6) | (this.view.getUint8(this.offset++) & 0x3F));
-                else if (byte1 <= 0xEF)
-                    text += String.fromCharCode(((byte1 & 0x0F) << 12) | ((this.view.getUint8(this.offset++) & 0x3F) << 6) | (this.view.getUint8(this.offset++) & 0x3F));
-                else {
-                    let codePoint = ((byte1 & 0x07) << 18) | ((this.view.getUint8(this.offset++) & 0x3F) << 12) | ((this.view.getUint8(this.offset++) & 0x3F) << 6) | (this.view.getUint8(this.offset++) & 0x3F);
-
-                    if (codePoint >= 0x10000) {
-                        codePoint -= 0x10000;
-                        text += String.fromCharCode(0xD800 | (codePoint >> 10), 0xDC00 | (codePoint & 0x3FF));
+        this.mainCanvas.onfocus = () => {
+            this.isTyping = false;
+        };
+        document.getElementById("chat_textbox").onblur = () => {
+            this.isTyping = false;
+        };
+        document.getElementById("chat_textbox").onfocus = () => {
+            this.isTyping = true;
+        };
+        this.spacePressed = false;
+        this.wPressed = false;
+        onkeydown = (event) => {
+            switch (event.keyCode) {
+                case 13:
+                    if (this.isTyping || this.hideChat) {
+                        this.isTyping = false;
+                        document.getElementById("chat_textbox").blur();
+                        chattxt = document.getElementById("chat_textbox").value;
+                        if (chattxt.length > 0) this.sendChat(chattxt);
+                        document.getElementById("chat_textbox").value = "";
+                    } else {
+                        if (!this.hasOverlay) {
+                            document.getElementById("chat_textbox").focus();
+                            this.isTyping = true;
+                        }
                     }
-                    else text += String.fromCharCode(codePoint);
-                }
+                    break;
+                case 32:
+                    if ((!this.spacePressed) && (!this.isTyping)) {
+                        this.sendMouseMove();
+                        this.sendUint8(17);
+                        this.spacePressed = true;
+                    }
+                    break;
+                case 87:
+                    if ((!this.wPressed) && (!this.isTyping)) {
+                        this.sendMouseMove();
+                        this.sendUint8(21);
+                        this.wPressed = true;
+                    }
+                    break;
+                case 27:
+                    this.showOverlays(true);
+                    break;
             }
-
+        };
+        onkeyup = (event) => {
+            switch (event.keyCode) {
+                case 32:
+                    this.spacePressed = false;
+                    break;
+                case 87:
+                    this.wPressed = false;
+                    break;
+            }
+        };
+        onblur = () => {
+            this.sendUint8(19);
+            this.wPressed = this.spacePressed = false;
+        };
+        onresize = this.canvasResize.bind(this);
+        this.canvasResize();
+        if (requestAnimationFrame) {
+            requestAnimationFrame(this.redrawGameScene.bind(this));
+        } else {
+            setInterval(this.drawGameScene.bind(this), 1E3 / 60);
+        }
+        setInterval(this.sendMouseMove.bind(this), 40);
+        setTimeout(this.showCaptcha.bind(this), 100);
+        document.querySelector("#overlays").style = "display:block;";
+		const select = document.getElementById("gamemode");
+        if (select && select.value) {
+            this.CONNECTION_URL = select.value;
+        }
+        
+        // Анимация времени для фона
+        setInterval(() => {
+            this.time += 0.02;
+        }, 16);
+		this.loadBackground();
+    }
+    
+    handleWheel(event) {
+        this.zoom *= Math.pow(.9, event.wheelDelta / -120 || event.detail || 0);
+        if (this.zoom < 0) this.zoom = 1;
+        if (this.zoom > 4 / this.viewZoom) this.zoom = 4 / this.viewZoom;
+        if (this.zoom < 0.3) this.zoom = 0.3;
+    }
+    
+    mouseCoordinateChange() {
+        this.X = (this.rawMouseX - this.canvasWidth / 2) / this.viewZoom + this.nodeX;
+        this.Y = (this.rawMouseY - this.canvasHeight / 2) / this.viewZoom + this.nodeY;
+    }
+    
+    hideOverlays() {
+        this.hasOverlay = false;
+        document.querySelector("#overlays").style = "display:none;";
+    }
+    
+    showOverlays(arg) {
+        this.hasOverlay = true;
+        this.userNickName = null;
+        document.querySelector("#overlays").style = "display:block;";
+    }
+    
+    showConnecting(token) {
+        const wsUrl = (this.useHttps ? "wss://" : "ws://") + this.CONNECTION_URL;
+        if (this.ws && this.ws.readyState === WebSocket.OPEN && this.currentWebSocketUrl === wsUrl) {
+            console.log("Соединение уже активно для этого URL, пропускаем повторное подключение.");
+            return;
+        }
+        if (this.ma) {
+            this.currentWebSocketUrl = wsUrl;
+            this.wsConnect(wsUrl, token);
+            this.disableCaptcha();
+        }
+    }
+    
+    wsConnect(undefined, token) {
+        if (this.ws) {
+            this.ws.onopen = null;
+            this.ws.onmessage = null;
+            this.ws.onclose = null;
+            try {
+                this.ws.close();
+            } catch (b) {}
+            this.ws = null;
+        }
+        const wsUrl = (this.useHttps ? "wss://" : "ws://") + this.CONNECTION_URL;
+        this.playerCells = [];
+        this.nodes = {};
+        this.nodelist = [];
+        this.Cells = [];
+        this.leaderBoard = [];
+        console.info("Connecting to " + wsUrl + "..");
+        const params = `?token=${encodeURIComponent(token)}&accountToken=${encodeURIComponent(localStorage.accountToken)}`;
+        this.ws = new WebSocket(wsUrl + params, "eSejeKSVdysQvZs0ES1H");
+        this.ws.binaryType = "arraybuffer";
+        this.ws.onopen = this.onWsOpen.bind(this);
+        this.ws.onmessage = this.onWsMessage.bind(this);
+        this.ws.onclose = this.onWsClose.bind(this);
+    }
+    
+    prepareData(a) {
+        return new DataView(new ArrayBuffer(a));
+    }
+    
+    wsSend(a) {
+        this.ws.send(a.buffer);
+    }
+    
+    onWsOpen() {
+        let msg;
+        this.delay = 500;
+        document.querySelector("#connecting").style = "display:none;";
+        msg = this.prepareData(5);
+        msg.setUint8(0, 254);
+        msg.setUint32(1, 5, true);
+        this.wsSend(msg);
+        msg = this.prepareData(5);
+        msg.setUint8(0, 255);
+        msg.setUint32(1, 0, true);
+        this.wsSend(msg);
+        this.sendNickName();
+        console.info("Connection successful!");
+		setInterval(() => {    
+            if (!document.hidden) {        
+                this.pingstamp = Date.now();           
+                this.wsSend(new Uint8Array([2]));        
+            }      
+        }, 3000);
+		setTimeout(() => { this.sendChat("вошёл в игру!"); }, 1000); 
+    }
+    
+    onWsClose() {
+        setTimeout(this.showConnecting.bind(this), this.delay);
+        this.delay *= 1.5;
+    }
+    
+    onWsMessage(msg) {
+        this.handleWsMessage(new DataView(msg.data));
+    }
+    
+    handleWsMessage(msg) {
+        let offset = 0;
+        let setCustomLB = false;
+        function getString() {
+            let text = '';
+            let char;
+            while ((char = msg.getUint16(offset, true)) !== 0) {
+                offset += 2;
+                text += String.fromCharCode(char);
+            }
+            offset += 2;
             return text;
         }
-    };
-    BinaryReader.prototype.offset = 0;
-
-    const getXp = level => ~~(100 * (level ** 2 / 2));
-    const getLevel = xp => ~~((xp / 100 * 2) ** .5);
-
-    const normalizeFractlPart = n => (n % (Math.PI * 2)) / (Math.PI * 2);
-
-
-    // Капча, которая каждый раз грузит скрипт заново и полностью вычищает его после успеха.
-    class Captcha {
-        constructor({ sitekey, theme = "dark" }) {
-            this.sitekey = sitekey;
-            this.theme = theme;
-            this._widgetId = null;
-            this._resolver = null;
-            this.token = null;
-        }
-
-        // Показать капчу, дождаться токена. После успеха — ПОЛНЫЙ teardown.
-        async getToken() {
-            await this._loadScriptFresh();  // всегда новая загрузка
-            this._ensureHost();
-            return new Promise((resolve) => {
-                this._resolver = resolve;
-                this._render();
-            });
-        }
-
-        // ---------- private ----------
-
-        _loadScriptFresh() {
-            // На всякий случай уберём следы прошлых загрузок перед новой
-            this._hardKillTurnstile();
-
-            return new Promise((resolve, reject) => {
-                const s = document.createElement("script");
-                // explicit — сами вызываем render(); добавим cache-buster, чтобы не держались соединения CDNs
-                const cb = Date.now().toString(36);
-                s.src = `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&_=${cb}`;
-                s.async = true; s.defer = true;
-                s.onload = resolve;
-                s.onerror = () => reject(new Error("Не удалось загрузить Turnstile"));
-                document.head.appendChild(s);
-            });
-        }
-
-        _ensureHost() {
-            const ui = document.getElementById("user-interface");
-            if (!ui) { console.error("Нет #user-interface"); return; }
-            if (getComputedStyle(ui).position === "static") ui.style.position = "relative";
-
-            let wrap = document.getElementById("captcha-wrapper");
-            if (!wrap) {
-                wrap = document.createElement("div");
-                wrap.id = "captcha-wrapper";
-                wrap.style.cssText = `
-        position:absolute; inset:0; display:grid;
-        align-items:center; justify-content:center;
-        background:rgba(0,0,0,.6); z-index:99999;`;
-                ui.appendChild(wrap);
-
-                const container = document.createElement("div");
-                container.id = "captcha-container";
-                container.style.cssText = "background:#111;padding:24px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);";
-                wrap.appendChild(container);
-            } else {
-                wrap.style.display = "grid";
-            }
-        }
-
-        _render() {
-            const container = document.getElementById("captcha-container");
-            if (!container) return;
-
-            // Перестраховка — если был предыдущий widgetId
-            if (this._widgetId && window.turnstile) {
-                try { window.turnstile.remove(this._widgetId); } catch (_) { }
-                this._widgetId = null;
-            }
-
-            this._widgetId = window.turnstile.render(container, {
-                sitekey: this.sitekey,
-                theme: this.theme,
-                callback: (token) => this._onSuccess(token),
-                "error-callback": () => this._onError("captcha-error"),
-                "timeout-callback": () => this._onError("captcha-timeout"),
-            });
-        }
-
-        _onSuccess(token) {
-            this.token = token;
-
-            // Сначала убираем визуальный слой капчи, потом вычищаем всё, что связано с challenges.cloudflare.com
-            const wrap = document.getElementById("captcha-wrapper");
-            if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
-
-            this._hardKillTurnstile(); // ← Полный teardown
-
-            if (this._resolver) {
-                const resolve = this._resolver;
-                this._resolver = null;
-                resolve(token);
-            }
-        }
-
-        _onError(reason) {
-            console.warn("Turnstile issue:", reason);
-            // В случае ошибки пробуем пересоздать с жёстким teardown
-            this._hardKillTurnstile();
-            this._loadScriptFresh().then(() => this._ensureHost()).then(() => this._render());
-        }
-
-        _hardKillTurnstile() {
-            // 1) Удаляем виджет (iframe)
-            if (this._widgetId && window.turnstile) {
-                try { window.turnstile.remove(this._widgetId); } catch (_) { }
-                this._widgetId = null;
-            }
-
-            // 2) Удаляем iframe'ы, связанные с challenges.cloudflare.com (перестраховка)
-            document.querySelectorAll('iframe[src*="challenges.cloudflare.com"]').forEach(n => {
-                if (n.parentNode) n.parentNode.removeChild(n);
-            });
-
-            // 3) Удаляем скрипты Turnstile
-            document.querySelectorAll('script[src*="challenges.cloudflare.com/turnstile"]').forEach(s => {
-                if (s.parentNode) s.parentNode.removeChild(s);
-            });
-
-            // 4) Чистим глобальный объект (скрипт при следующем вызове загрузится заново)
-            if (window.turnstile) {
-                try { delete window.turnstile; } catch (_) { window.turnstile = undefined; }
-            }
-
-            // 5) Чистим возможные дополнительные `<link>` или `<img>` на этот домен (редко, но на всякий случай)
-            document.querySelectorAll('link[href*="challenges.cloudflare.com"]').forEach(n => n.parentNode && n.parentNode.removeChild(n));
-            document.querySelectorAll('img[src*="challenges.cloudflare.com"]').forEach(n => n.parentNode && n.parentNode.removeChild(n));
+        const messageType = msg.getUint8(offset++);
+        switch (messageType) {
+            case 2:
+                this.ping = Date.now() - this.pingstamp;
+                break;
+            case 16:
+                const reader = new BinaryReader(msg);
+                reader.offset++;
+                this.updateNodes(reader);
+                break;
+            case 17:
+                this.posSize = 0.15;
+                break;
+            case 20:
+                this.playerCells = [];
+                break;
+            case 48:
+                setCustomLB = true;
+                this.noRanking = true;
+                const count = msg.getUint32(offset, true);
+                offset += 4;
+                this.leaderBoard = [];
+                for (let i = 0; i < count; i++) {
+                    const nodeId = msg.getUint32(offset, true);
+                    offset += 4;
+                    const text = getString();
+                    this.leaderBoard.push({
+                        id: null,
+                        name: text,
+                        level: -1,
+                        xp: 0
+                    });
+                }
+                this.drawLeaderBoard();
+                break;
+            case 49:
+                if (!setCustomLB) {
+                    this.noRanking = false;
+                }
+                const LBplayerNum = msg.getUint32(offset, true);
+                offset += 4;
+                this.leaderBoard = [];
+                for (let i = 0; i < LBplayerNum; ++i) {
+                    const nodeId = msg.getUint32(offset, true);
+                    offset += 4;
+                    const playerName = getString();
+                    const playerXp = msg.getUint32(offset, true);
+                    offset += 4;
+                    const level = playerXp ? this.getLevel(playerXp) : -1;
+                    this.leaderBoard.push({
+                        id: nodeId,
+                        name: playerName,
+                        level,
+                        xp: playerXp
+                    });
+                }
+                this.drawLeaderBoard();
+                break;
+            case 64:
+                this.leftPos = msg.getFloat64(offset, true);
+                offset += 8;
+                this.topPos = msg.getFloat64(offset, true);
+                offset += 8;
+                this.rightPos = msg.getFloat64(offset, true);
+                offset += 8;
+                this.bottomPos = msg.getFloat64(offset, true);
+                offset += 8;
+                msg.getUint16(offset, true);
+                offset += 2;
+                msg.getUint16(offset, true);
+                offset += 2;
+                this.ownerPlayerId = msg.getUint32(offset, true);
+                offset += 4;
+                this.mapWidth = (this.rightPos + this.leftPos) / 2;
+                this.mapHeight = (this.bottomPos + this.topPos) / 2;
+                this.posX = (this.rightPos + this.leftPos) / 2;
+                this.posY = (this.bottomPos + this.topPos) / 2;
+                this.posSize = 1;
+                if (this.playerCells.length === 0) {
+                    this.nodeX = this.posX;
+                    this.nodeY = this.posY;
+                    this.viewZoom = this.posSize;
+                }
+                break;
+            case 99:
+                this.addChat(msg, offset);
+                break;
+            case 114:
+                const xp = msg.getUint32(offset, true);
+                this.onUpdateXp(xp);
+                break;
         }
     }
-
-
-
-    class SkinManager {
-        constructor(core) {
-            this.core = core;
-            this.nickToCode = new Map();
-            this.textureCache = new Map();
-            this.ready = false;
-        }
-
-        async init() {
-            if (!location.hostname) {
-                this.ready = true;
-                return;
+    
+    addChat(view, offset) {
+        function getString() {
+            var text = '',
+                char;
+            while ((char = view.getUint16(offset, true)) != 0) {
+                offset += 2;
+                text += String.fromCharCode(char);
             }
-            try {
-                const res = await fetch("https://api.agar.su/skinlist.txt", { cache: "no-store" });
-                const text = await res.text();
-                for (const raw of text.split(/\r?\n/)) {
-                    const line = raw.trim();
-                    if (!line || line.startsWith("#")) continue;
-                    const m = line.match(/^(.+?)[\s:]+(\d+)\s*$/);
-                    if (m) this.nickToCode.set(m[1].trim().toLowerCase(), m[2].trim());
-                }
-                this.ready = true;
-            } catch (e) {
-                console.warn("Не удалось загрузить список скинов:", e);
-                this.ready = true;
-            }
+            offset += 2;
+            return text;
         }
-
-        getCodeForName(name) {
-            if (!name) return null;
-            const explicit = String(name).match(/(?:^|\s)nick:(\d+)(?:\s|$)/i);
-            if (explicit) return explicit[1];
-            return this.nickToCode.get(String(name).trim().toLowerCase()) || null;
+        var flags = view.getUint8(offset++);
+        if (flags & 0x80) {};
+        var r = view.getUint8(offset++),
+            g = view.getUint8(offset++),
+            b = view.getUint8(offset++),
+            color = (r << 16 | g << 8 | b).toString(16);
+        while (color.length < 6) {
+            color = '0' + color;
         }
-
-        getTextureForCode(code) {
-            if (!code) return null;
-            if (this.textureCache.has(code)) return this.textureCache.get(code);
-            const tex = PIXI.Texture.from(`https://api.agar.su/skins/${code}.png`);
-            if (tex?.baseTexture) {
-                tex.baseTexture.mipmap = PIXI.MIPMAP_MODES.ON;
-                tex.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
-            }
-            this.textureCache.set(code, tex);
-            return tex;
-        }
-
-        applyToCell(cell, name) {
-            const code = this.getCodeForName(name);
-            if (!code) {
-                if (cell.skinSprite) { cell.skinSprite.destroy({ children: true }); cell.skinSprite = null; }
-                if (cell.skinMask) { cell.skinMask.destroy(); cell.skinMask = null; }
-                return;
-            }
-
-            const tex = this.getTextureForCode(code);
-            if (!tex) return;
-
-            if (!cell.skinSprite) {
-                const OVERSCAN = 2; // небольшой запас, чтобы не мелькал цветной край
-
-                // спрайт скина фиксированного размера (масштабируется родителем через sprite.scale)
-                const s = new PIXI.Sprite(tex);
-                s.anchor.set(0.5);
-                s.width = 512 + 2 * OVERSCAN;
-                s.height = 512 + 2 * OVERSCAN;
-                s.zIndex = 2;
-                s.roundPixels = false; // важное: не снапать к пикселям
-                cell.sprite.addChild(s);
-                cell.skinSprite = s;
-
-                // круглая маска фиксированного радиуса (тоже масштабируется родителем)
-                const mask = new PIXI.Graphics();
-                mask.beginFill(0xffffff);
-                mask.drawCircle(0, 0, 256 + OVERSCAN);
-                mask.endFill();
-                mask.zIndex = 3;
-                mask.cacheAsBitmap = false; // на постоянно масштабируемых масках кэш не нужен
-                cell.sprite.addChild(mask);
-
-                s.mask = mask;
-                cell.skinMask = mask;
-            } else {
-                // только меняем текстуру — размеры/маску не трогаем
-                cell.skinSprite.texture = tex;
+        const playerXp = view.getUint32(offset, true);
+        offset += 4;
+        const pId = view.getUint16(offset, true);
+        offset += 2;
+        color = '#' + color;
+        this.chatBoard.push({
+            "pId": pId,
+            "playerXp": playerXp,
+            "playerLevel": playerXp ? this.getLevel(playerXp) : -1,
+            "name": getString(),
+            "color": color,
+            "message": getString()
+        });
+        this.drawChatBoard();
+    }
+    
+    sendMouseMove() {
+        var msg;
+        if (this.wsIsOpen()) {
+            msg = this.rawMouseX - this.canvasWidth / 2;
+            var b = this.rawMouseY - this.canvasHeight / 2;
+            if (64 <= msg * msg + b * b && !(.01 > Math.abs(this.oldX - this.X) && .01 > Math.abs(this.oldY - this.Y))) {
+                this.oldX = this.X;
+                this.oldY = this.Y;
+                msg = this.prepareData(21);
+                msg.setUint8(0, 16);
+                msg.setFloat64(1, this.X, true);
+                msg.setFloat64(9, this.Y, true);
+                msg.setUint32(17, 0, true);
+                this.wsSend(msg);
             }
         }
     }
-
-
-
-
-    class Network {
-        static SERVER_TO_CLIENT = {
-            UPDATE_PING: 2,
-            UPDATE_NODES: 16,
-            SPECTATE_CAMERA: 17,
-            // CLEAR_ALL: 300,
-            CLEAR_OWNED_CELLS: 20,
-            LEADERBOARD_UPDATE: 49,
-            BORDER: 64,
-            CHAT_MESSAGE: 99,
-            UPDATE_EXP: 114
+    
+    getColorId(hex) {
+        const index = this.cellColors.indexOf(hex);
+        return index === -1 ? 0 : index + 1;
+    }
+    
+    sendNickName() {
+        if (this.wsIsOpen() && this.userNickName != null) {
+            var msg = this.prepareData(1 + 2 * this.userNickName.length + 1);
+            msg.setUint8(0, 0);
+            msg.setUint8(1, this.getColorId(localStorage.getItem("selectedColor")));
+            for (var i = 0; i < this.userNickName.length; ++i) msg.setUint16(1 + 2 * i + 1, this.userNickName.charCodeAt(i), true);
+            this.wsSend(msg);
         }
-
-        static CLIENT_TO_SERVER = {
-            SPAWN: 0,
-            SPECTATE: 0x1,
-            MOUSE: 0x10,
-            SPLIT_PLAYER: 0x11,
-            SPLIT_MINION: 0x16,
-            EJECT_PLAYER: 0x15,
-            EJECT_MINION: 0x17,
-            CHAT: 99
-        }
-
-        constructor(core) {
-            this.core = core;
-            this.captcha = core.captcha;
-
-            this.protocol = "eSejeKSVdysQvZs0ES1H";
-
-            this.onOpen = this.onOpen.bind(this)
-            this.onMessage = this.onMessage.bind(this)
-            this.onClose = this.onClose.bind(this)
-            this.onError = this.onError.bind(this)
-
-            this.leaderboardItems = []
-            this.messages = []
-            this.border = {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-                centerX: 0,
-                centerY: 0,
-                width: 0,
-                height: 0
-            }
-            this.foodMinSize = 0
-            this.foodMaxSize = 0
-            this.ownerPlayerId = 0
-            this.ping = 0
-            this.pingstamp = 0
-        }
-
-        connect(addr, passedToken) {
-            const token = passedToken || (this.captcha && this.captcha.token) || "";
-            if (!token && location.hostname) {
-                // нет токена — попросим капчу с полным teardown после
-                if (this.captcha?.getToken) {
-                    this.captcha.getToken().then(t => this.connect(addr, t));
-                }
-                return;
-            }
-
-            const params = `?token=${encodeURIComponent(token)}`;
-            if (this.ws) this.reset();
-            const ws = (this.ws = new WebSocket(addr + params, this.protocol));
-            ws.binaryType = "arraybuffer";
-            ws.onopen = this.onOpen;
-            ws.onmessage = this.onMessage;
-            ws.onclose = this.onClose;
-            ws.onerror = this.onError;
-        }
-
-
-
-
-
-        reset() {
-            if (this.ws) this.ws.close()
-            this.ws = null
-            this.messages = []
-            this.border = {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-                centerX: 0,
-                centerY: 0,
-                width: 0,
-                height: 0
-            }
-            this.foodMinSize = 0
-            this.foodMaxSize = 0
-            this.ownerPlayerId = 0
-            this.ping = 0
-            this.pingstamp = 0
-            clearInterval(this.pingInterval)
-            clearInterval(this.mouseMoveInterval)
-            cancelAnimationFrame(this.core.app.hueShiftingRAF)
-        }
-
-        send(data) {
-            if (!this.ws || this.ws.readyState !== 1) return
-            if (data.build) this.ws.send(data.build())
-            else this.ws.send(data)
-        }
-
-        sendUint8(a) {
-            const msg = prepareData(1);
-            msg.setUint8(0, a);
-            this.send(msg);
-        }
-        sendAccountToken() {
-            const token = localStorage.accountToken;
-            if (token) {
-                const msg = prepareData(1 + 2 * token.length);
-                msg.setUint8(0, 114);
-                for (var i = 0; i < token.length; ++i) msg.setUint16(1 + 2 * i, token.charCodeAt(i), true);
-                this.send(msg.buffer);
-            }
-        }
-
-        onOpen() {
-            this.sendAccountToken();
-
-            this.send(new Uint8Array([254, 5, 0, 0, 0]))
-            this.send(new Uint8Array([255, 0, 0, 0, 0]))
-
-            //this.spawn();
-            this.core.ui.setPanelState(true);
-            this.pingInterval = setInterval(() => {
-
-                if (!document.hidden) {
-                    this.pingstamp = Date.now();
-                    this.send(new Uint8Array([2]).buffer); // ping
-                }
-
-            }, 3000);
-            this.mouseMoveInterval = setInterval(() => {
-                this.sendMouseMove(
-                    (this.core.ui.mouse.x - innerWidth / 2) / this.core.app.camera.s + this.core.app.camera.x,
-                    (this.core.ui.mouse.y - innerHeight / 2) / this.core.app.camera.s + this.core.app.camera.y
-                );
-            }, 40);
-        }
-
-        onMessage({ data }) {
-            this.now = Date.now()
-
-            const reader = new Reader(new DataView(data), 0, true)
-            const opcode = reader.getUint8()
-
-            switch (opcode) {
-                case Network.SERVER_TO_CLIENT.UPDATE_PING: {
-                    this.ping = Date.now() - this.pingstamp;
-                    break
-                }
-                case Network.SERVER_TO_CLIENT.UPDATE_NODES: {
-                    const reader = new BinaryReader(
-                        new DataView(data)
-                    );
-                    reader.offset++; // skip messageType
-                    this.onNodesUpdate(reader)
-
-                    break
-                }
-                case Network.SERVER_TO_CLIENT.CLEAR_OWNED_CELLS: {
-                    this.onClearOwnedCells()
-                    break
-                }
-                // case Network.SERVER_TO_CLIENT.CLEAR_ALL: { // TODO
-                //     this.onClearAll()
-                //     break
-                // }
-                case Network.SERVER_TO_CLIENT.BORDER: {
-                    this.onBorder(reader)
-                    break
-                }
-                case Network.SERVER_TO_CLIENT.SPECTATE_CAMERA: {
-                    this.onSpectateCamera(reader)
-                    break
-                }
-                case Network.SERVER_TO_CLIENT.LEADERBOARD_UPDATE: {
-                    this.onLoaderboard(reader)
-                    break
-                }
-                case Network.SERVER_TO_CLIENT.CHAT_MESSAGE: {
-                    this.onChatMessage(reader)
-                    break;
-                }
-            }
-        }
-
-        onClose() {
-            this.core.app.clear()
-        }
-        onError() {
-            this.core.app.clear()
-        }
-
-        addCell(id, x, y, r, name, color) {
-            let cellsByID = this.core.app.cellsByID
-            let cells = this.core.app.cells
-
-            let sprite = new PIXI.Sprite(this.core.app.textures.cell)
-            sprite.anchor.set(.5)
-            sprite.roundPixels = false;
-
-            this.core.app.stage.addChild(sprite)
-
-            const cell = new Cell(this.core, id, x, y, r, sprite, name, color);
-            cellsByID.set(id, cell);
-            cells.push(cell);
-        }
-
-        spawn() {
-            const name = this.core.store.name + "#";
-            const colorId = getColorId(localStorage.getItem("selectedColor")) || 0;
-
-            const msg = prepareData(4 + 2 * name.length); // 1+1 + имя + 0x0000
-
-            let offset = 0;
-            msg.setUint8(offset++, 0);         // opcode
-            msg.setUint8(offset++, colorId);   // цвет
-
-            for (let i = 0; i < name.length; i++) {
-                msg.setUint16(offset, name.charCodeAt(i), true);
+    }
+    
+    sendChat(str) {
+        if (this.wsIsOpen() && (str.length < 200) && (str.length > 0) && !this.hideChat) {
+            var msg = this.prepareData(2 + 2 * str.length);
+            var offset = 0;
+            msg.setUint8(offset++, 99);
+            msg.setUint8(offset++, 0);
+            for (var i = 0; i < str.length; ++i) {
+                msg.setUint16(offset, str.charCodeAt(i), true);
                 offset += 2;
             }
-            msg.setUint16(offset, 0, true);    // завершающий ноль
-
-            this.send(msg);
-        }
-        spectate() {
-            const writer = new Writer(true)
-            writer.setUint8(Network.CLIENT_TO_SERVER.SPECTATE)
-            this.send(writer)
-        }
-
-        sendMouseMove(x, y) {
-            const writer = new Writer(true);
-            writer.setUint8(Network.CLIENT_TO_SERVER.MOUSE);
-            writer.setUint32(x);
-            writer.setUint32(y);
-            writer._b.push(0, 0, 0, 0);
-            this.send(writer);
-        }
-
-        sendChatMessage(text) {
-            const writer = new Writer()
-            writer.setUint8(Network.CLIENT_TO_SERVER.CHAT)
-            writer.setUint8(0)
-            writer.setStringUTF16(text)
-            this.send(writer)
-        }
-
-        onChatMessage(reader) {
-            const flagMask = reader.getUint8();
-            const color = {
-                r: reader.getUint8(),
-                g: reader.getUint8(),
-                b: reader.getUint8()
-            }
-            const playerXp = reader.getUint32(); // TODO...
-
-            const pId = reader.getUint16(); // TODO...
-
-            const name = reader.getStringUTF16()
-            const content = reader.getStringUTF16()
-
-            const lvl = playerXp ? getLevel(playerXp) : -1;
-            const nameWithLvl = lvl >= 0 ? `${name} [Lv ${lvl}]` : name;
-
-            this.messages.push({
-                color,
-                name: nameWithLvl,
-                content
-            });
-            this.core.ui.updateChat()
-            this.core.ui.chatContent.scrollTop = 9000000
-        }
-
-        onSpectateCamera(reader) {
-            this.core.app.camera.target.s = 0.2;
-        }
-
-        onLoaderboard(reader) {
-            this.leaderboardItems = []
-            const count = reader.getUint32()
-            for (let i = 0; i < count; ++i) {
-                const nodeId = reader.getUint32()
-                const name = reader.getStringUTF16()
-                const playerXp = reader.getUint32();
-                const playerLevel = playerXp ? getLevel(playerXp) : -1; // TODO...
-                this.leaderboardItems.push({ id: nodeId, name: name, level: playerLevel })
-            }
-            this.core.ui.updateLeaderboard()
-        }
-
-        onBorder(reader) {
-            this.border.left = reader.getFloat64()
-            this.border.top = reader.getFloat64()
-            this.border.right = reader.getFloat64()
-            this.border.bottom = reader.getFloat64()
-            // Размеры еды: сервер отправляет радиус напрямую (как и для клеток игроков)
-            // Убираем умножение на 100 и sqrt, так как это радиус, а не масса
-            const rawMinSize = reader.getUint16();
-            const rawMaxSize = reader.getUint16();
-            // Ограничение: еда обычно должна быть маленькой (5-15 пикселей в радиусе)
-            const MAX_FOOD_RADIUS = 15;
-            this.foodMinSize = Math.min(rawMinSize, MAX_FOOD_RADIUS);
-            this.foodMaxSize = Math.min(rawMaxSize, MAX_FOOD_RADIUS);
-            // Убеждаемся, что min <= max
-            if (this.foodMinSize > this.foodMaxSize) {
-                this.foodMaxSize = this.foodMinSize;
-            }
-            this.ownerPlayerId = reader.getUint32()
-            this.border.width = this.border.right - this.border.left
-            this.border.height = this.border.bottom - this.border.top
-            this.border.centerX = (this.border.left + this.border.right) / 2
-            this.border.centerY = (this.border.top + this.border.bottom) / 2
-            this.core.app.drawBackground()
-            this.core.app.drawGrid()
-            this.core.app.drawSectors()
-
-            // >>> ДОБАВЬ ЭТО:
-            // Если мы не владеем клетками (спектатор/до спавна) — ставим камеру в центр.
-            if (this.core.app.ownedCells.length === 0) {
-                const cam = this.core.app.camera;
-                cam.x = cam.target.x = this.border.centerX;
-                cam.y = cam.target.y = this.border.centerY;
-
-                // Чуть отдалим зум для спектатора: соответствуем логике updateCamera()
-                // viewRange()*0.2 — твоя формула для spectate
-                const targetZoom = this.core.app.viewRange() * 0.2;
-                cam.s = cam.target.s = this.core.app.viewZoom = targetZoom;
-            }
-        }
-
-
-        sendSplit() {
-            const writer = new Writer(true)
-            writer.setUint8(Network.CLIENT_TO_SERVER.SPLIT_PLAYER)
-            this.send(writer)
-        }
-
-        sendE() {
-            const writer = new Writer(true)
-            writer.setUint8(22)
-            this.send(writer)
-        }
-
-        sendR() {
-            const writer = new Writer(true)
-            writer.setUint8(23)
-            this.send(writer)
-        }
-
-        sendT() {
-            const writer = new Writer(true)
-            writer.setUint8(24)
-            this.send(writer)
-        }
-
-        sendP() {
-            const writer = new Writer(true)
-            writer.setUint8(25)
-            this.send(writer)
-        }
-
-        sendEject() {
-            const writer = new Writer(true)
-            writer.setUint8(Network.CLIENT_TO_SERVER.EJECT_PLAYER)
-            this.send(writer)
-        }
-
-        onClearOwnedCells() {
-            this.core.app.ownedCells = []
-        }
-
-        onClearAll() {
-            this.core.app.clear()
-        }
-
-        rgbToHex(arr) {
-            let hex = ""
-
-            for (const rawColor of arr) {
-                const color = rawColor.toString(16)
-                hex += color.length == 1 ? `0${color}` : color
-            }
-
-            return `0x${hex}`
-        }
-
-        onNodesUpdate(reader) {
-            this.core.app.minimapEntity.position.set(((this.core.app.camera.x + this.border.width / 2) / this.border.width) * 250, ((this.core.app.camera.y + this.border.height / 2) / this.border.height) * 250)
-            let cellsByID = this.core.app.cellsByID
-
-            // consume records
-            for (let killed; killed = reader.uint32();) {
-                const killer = reader.uint32();
-                if (!cellsByID.has(killer) || !cellsByID.has(killed)) continue;
-                cellsByID.get(killed).destroy(killer);
-            }
-
-            for (let id; id = reader.uint32();) {
-                const type = reader.uint8();
-
-                let posX = 0;
-                let posY = 0;
-                let size = 0;      // это радиус!
-                let playerId = 0;
-
-                if (type === 1) {
-                    // еда
-                    posX = CORE.net.border.left + (CORE.net.border.right * 2) * normalizeFractlPart(id);
-                    posY = CORE.net.border.top + (CORE.net.border.bottom * 2) * normalizeFractlPart(id * id);
-                    // Исправление: правильная формула для размера еды с защитой от деления на ноль
-                    const sizeRange = Math.max(1, CORE.net.foodMaxSize - CORE.net.foodMinSize);
-                    size = CORE.net.foodMinSize + (id % sizeRange);
-                } else {
-                    if (type === 0) playerId = reader.uint32();
-                    posX = reader.int32();
-                    posY = reader.int32();
-                    size = reader.uint16(); // ← радиус
-                }
-
-                const r = reader.uint8();
-                const g = reader.uint8();
-                const b = reader.uint8();
-
-                // Оптимизация: более быстрый способ создания hex цвета
-                // Вместо toString(16) + padStart используем более эффективный метод
-                const hex = ((r << 16) | (g << 8) | b);
-                let color = "#" + ("000000" + hex.toString(16)).slice(-6).toUpperCase();
-
-                const spiked = reader.uint8();
-                const flagVirus = !!(spiked & 0x01);
-                const flagEjected = !!(spiked & 0x20);
-                const flagAgitated = !!(spiked & 0x10);
-
-                const name = reader.utf8();
-
-                if (cellsByID.has(id)) {
-                    // обновление существующей клетки
-                    const cell = cellsByID.get(id);
-                    cell.update(this.now);
-                    cell.updated = this.now;
-
-                    cell.ox = cell.x;
-                    cell.oy = cell.y;
-                    cell.or = cell.r;
-
-                    cell.nx = posX;
-                    cell.ny = posY;
-                    cell.nr = size;
-
-                    if (color && color !== cell.color) {
-                        cell.hasChanged = true;      // ← важная строка
-                        cell.color = color;          // применится даже когда клетка уже отрисована
-                    }
-
-                    if (name && name !== cell.name) {
-                        cell.hasChanged = true;      // ← важная строка
-                        cell.name = name;            // перерисует текст/скин
-                    }
-                } else {
-                    // новая клетка
-                    this.addCell(id, posX, posY, size, name, color);
-
-                    // сразу применяем текущие имя/цвет через сеттеры (hasChanged уже true)
-                    const cell = this.core.app.cellsByID.get(id);
-                    if (cell) {
-                        cell.color = color;
-                        cell.name = name;
-                    }
-
-                    if (playerId === CORE.net.ownerPlayerId) {
-                        this.core.app.ownedCells.push(id);
-                    }
-                }
-            }
-
-
-            // dissapear records
-            while (reader.canRead) {
-                const killed = reader.uint32();
-                if (cellsByID.has(killed) && !cellsByID.get(killed).destroyed)
-                    cellsByID.get(killed).destroy(null)
-            }
+            this.wsSend(msg);
         }
     }
-
-    class Writer {
-        constructor(littleEndian = true) {
-            this.writer = true;
-            this.tmpBuf = new DataView(new ArrayBuffer(8));
-            this._e = littleEndian;
-            this.reset();
-            return this;
-        }
-        reset(littleEndian = this._e) {
-            this._e = littleEndian;
-            this._b = [];
-            this._o = 0;
-        }
-        setUint8(a) {
-            if (a >= 0 && a < 256) this._b.push(a);
-            return this;
-        }
-        setInt8(a) {
-            if (a >= -128 && a < 128) this._b.push(a);
-            return this;
-        }
-        setUint16(a) {
-            this.tmpBuf.setUint16(0, a, this._e);
-            this._move(2);
-            return this;
-        }
-        setInt16(a) {
-            this.tmpBuf.setInt16(0, a, this._e);
-            this._move(2);
-            return this;
-        }
-        setUint32(a) {
-            this.tmpBuf.setUint32(0, a, this._e);
-            this._move(4);
-            return this;
-        }
-        setInt32(a) {
-            this.tmpBuf.setInt32(0, a, this._e);
-            this._move(4);
-            return this;
-        }
-        setFloat32(a) {
-            this.tmpBuf.setFloat32(0, a, this._e);
-            this._move(4);
-            return this;
-        }
-        setFloat64(a) {
-            this.tmpBuf.setFloat64(0, a, this._e);
-            this._move(8);
-            return this;
-        }
-        _move(b) {
-            for (let i = 0; i < b; i++) this._b.push(this.tmpBuf.getUint8(i));
-        }
-        setStringUTF8(s) {
-            const bytesStr = unescape(encodeURIComponent(s));
-            for (let i = 0, l = bytesStr.length; i < l; i++) this._b.push(bytesStr.charCodeAt(i));
-            this._b.push(0);
-            return this;
-        }
-
-        setStringUTF16(s) {
-            for (let i = 0; i < s.length; i++) {
-                this.setUint16(s.charCodeAt(i));
-            }
-            this.setUint16(0);
-            return this;
-        }
-
-        build() {
-            return new Uint8Array(this._b);
+    
+    wsIsOpen() {
+        return this.ws != null && this.ws.readyState === this.ws.OPEN;
+    }
+    
+    sendUint8(a) {
+        if (this.wsIsOpen()) {
+            var msg = this.prepareData(1);
+            msg.setUint8(0, a);
+            this.wsSend(msg);
         }
     }
-
-
-    class Reader {
-        constructor(view, offset, littleEndian) {
-            this.reader = true;
-            this._e = littleEndian;
-            if (view) this.repurpose(view, offset);
-        }
-        repurpose(view, offset) {
-            this.view = view;
-            this._o = offset || 0;
-        }
-        getUint8() {
-            return this.view.getUint8(this._o++, this._e);
-        }
-        getInt8() {
-            return this.view.getInt8(this._o++, this._e);
-        }
-        getUint16() {
-            return this.view.getUint16((this._o += 2) - 2, this._e);
-        }
-        getInt16() {
-            return this.view.getInt16((this._o += 2) - 2, this._e);
-        }
-        getUint32() {
-            return this.view.getUint32((this._o += 4) - 4, this._e);
-        }
-        getInt32() {
-            return this.view.getInt32((this._o += 4) - 4, this._e);
-        }
-        getFloat32() {
-            return this.view.getFloat32((this._o += 4) - 4, this._e);
-        }
-        getFloat64() {
-            return this.view.getFloat64((this._o += 8) - 8, this._e);
-        }
-        getStringUTF8() {
-            let s = '', b;
-            while ((b = this.view.getUint8(this._o++)) !== 0) s += String.fromCharCode(b);
-            return decodeURIComponent(escape(s));
-        }
-        getStringUTF16() {
-            let s = '', b;
-            while ((b = this.view.getUint16(this._o, true)) !== 0) {
-                this._o += 2;
-                s += String.fromCharCode(b);
-            }
-            this._o += 2;
-            return s;
-        }
+    
+    redrawGameScene() {
+        this.drawGameScene();
+        requestAnimationFrame(this.redrawGameScene.bind(this));
     }
-
-
-    class Application {
-        constructor(core) {
-            this.core = core
-
-            this.initRenderer()
-            this.initMinimap()
-
-            this.cells = []
-            this.cellsByID = new Map()
-            this.ownedCells = []
-            this.camera = {
-                x: 1,
-                y: 1,
-                s: 1,
-                w: 1,
-                score: 0,
-                target: {
-                    x: 1,
-                    y: 1,
-                    s: 1
-                }
-            }
-            // Лимиты зума: для игры и для спектатора
-            this.zoomLimits = {
-                player: { min: 0.2, max: 8 }, // когда у тебя есть клетки
-                spectate: { min: 0.04, max: 8 } // когда ты в спектате (без клеток)
-            };
-            this.zoom = 0.7;      // колесо (как старый zoom)
-            this.viewZoom = 1;  // сглаженный итоговый масштаб
-            // >>> Добавь это:
-            this._fpsFrames = 0;
-            this._fpsLast = performance.now();
-            this._fpsUpdateMs = 500; // усредняем каждые ~0.5 c
-            this.core.stats = this.core.stats || {};
-            this.core.stats.fps = 0;
-            // Кэш для оптимизации updateCamera
-            this._lastPivotX = 0;
-            this._lastPivotY = 0;
-            this._lastScale = 1;
-            this.loop = this.loop.bind(this)
-
-            this.loop()
-        }
-        viewRange() {
-            // как в old main_out: ratio по окну * zoom
-            const ratio = Math.max(this.renderer.height / 1080, this.renderer.width / 1920);
-            return ratio * this.zoom; // zoom берётся из колеса
-        }
-
-        // sumR — сумма радиусов owned-клеток (в старом коде суммировали size=radius)
-        calcViewZoom(sumR) {
-            // newViewZoom = (min(64/sumR,1))^0.4 * viewRange, затем сглаживание 9/10
-            const safeSum = Math.max(1e-6, sumR);
-            const newViewZoom = Math.pow(Math.min(64 / safeSum, 1), 0.4) * this.viewRange();
+    
+    canvasResize() {
+        window.scrollTo(0, 0);
+        this.canvasWidth = innerWidth;
+        this.canvasHeight = innerHeight;
+        this.nCanvas.width = this.canvasWidth;
+        this.nCanvas.height = this.canvasHeight;
+        this.drawGameScene();
+    }
+    
+    viewRange() {
+        var ratio;
+        ratio = Math.max(this.canvasHeight / 1080, this.canvasWidth / 1920);
+        return ratio * this.zoom;
+    }
+    
+    calcViewZoom() {
+        if (0 != this.playerCells.length) {
+            for (var newViewZoom = 0, i = 0; i < this.playerCells.length; i++) newViewZoom += this.playerCells[i].size;
+            newViewZoom = Math.pow(Math.min(64 / newViewZoom, 1), .1) * this.viewRange();
             this.viewZoom = (9 * this.viewZoom + newViewZoom) / 10;
         }
-
-
-        drawBorder() {
-            if (this.borderGraphics) this.borderGraphics.destroy()
-
-            const border = this.core.net.border
-            this.borderGraphics = new PIXI.Graphics()
-                .lineStyle(50, 0xffffff)
-                .drawRect(-border.width / 2, -border.height / 2, border.width, border.height);
-            this.borderGraphics.visible = this.core.settings.border
-
-            this.stage.addChild(this.borderGraphics)
+    }
+    
+// НОВЫЙ КРАСИВЫЙ ФОН В СТИЛЕ SLITHER.IO
+drawGrid() {
+    // 1. Сохраняем состояние для рисования
+    this.ctx.save();
+    
+    // 2. Применяем трансформации
+    this.ctx.translate(this.canvasWidth / 2, this.canvasHeight / 2);
+    this.ctx.scale(this.viewZoom, this.viewZoom);
+    this.ctx.translate(-this.nodeX, -this.nodeY);
+    
+    // Получаем границы карты (приходят с сервера)
+    const mapLeft = this.leftPos;
+    const mapTop = this.topPos;
+    const mapRight = this.rightPos;
+    const mapBottom = this.bottomPos;
+    const mapWidth = mapRight - mapLeft;
+    const mapHeight = mapBottom - mapTop;
+    
+    // Масштаб фона (чем меньше число, тем крупнее изображение)
+    // 1 = оригинальный размер
+    // 0.5 = увеличение в 2 раза
+    // 0.25 = увеличение в 4 раза
+    const bgScale = 2; // ← ЭТО ЗНАЧЕНИЕ ОТВЕЧАЕТ ЗА УВЕЛИЧЕНИЕ ФОНА
+    
+    // 3. Рисуем фоновое изображение ВНУТРИ карты
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(mapLeft, mapTop, mapWidth, mapHeight);
+    this.ctx.clip();
+    
+    if (this.backgroundImage) {
+        const originalImgWidth = this.backgroundImage.width;
+        const originalImgHeight = this.backgroundImage.height;
+        
+        // Увеличиваем размер изображения
+        const imgWidth = originalImgWidth * bgScale;
+        const imgHeight = originalImgHeight * bgScale;
+        
+        const viewLeft = this.nodeX - this.canvasWidth / 2 / this.viewZoom;
+        const viewTop = this.nodeY - this.canvasHeight / 2 / this.viewZoom;
+        const viewWidth = this.canvasWidth / this.viewZoom;
+        const viewHeight = this.canvasHeight / this.viewZoom;
+        
+        const startX = Math.floor(viewLeft / imgWidth) * imgWidth;
+        const startY = Math.floor(viewTop / imgHeight) * imgHeight;
+        
+        const repeatX = Math.ceil(viewWidth / imgWidth) + 2;
+        const repeatY = Math.ceil(viewHeight / imgHeight) + 2;
+        
+        for (let i = 0; i < repeatX; i++) {
+            for (let j = 0; j < repeatY; j++) {
+                const x = startX + i * imgWidth;
+                const y = startY + j * imgHeight;
+                this.ctx.drawImage(this.backgroundImage, x, y, imgWidth, imgHeight);
+            }
         }
-        drawBackground() {
-            const border = this.core.net.border;
-            const mapW = border.width;
-            const mapH = border.height;
-
-            const geometry = new PIXI.Geometry()
-                .addAttribute('aVertexPosition', [
-                    -mapW / 2, -mapH / 2,
-                    mapW / 2, -mapH / 2,
-                    -mapW / 2, mapH / 2,
-                    mapW / 2, mapH / 2,
-                ])
-                .addAttribute('aUvs', [0, 0, 1, 0, 0, 1, 1, 1])
-                .addIndex([0, 1, 2, 1, 3, 2]);
-
-            const shader = PIXI.Shader.from(`
-    precision highp float;
-    attribute vec2 aVertexPosition;
-    attribute vec2 aUvs;
-    uniform mat3 translationMatrix;
-    uniform mat3 projectionMatrix;
-    varying vec2 vUvs;
-    void main() {
-      vUvs = aUvs;
-      gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
     }
-  `, `
-    precision highp float;
-    varying vec2 vUvs;
-
-    uniform vec2 uCenter;
-
-    // Максимально плавный градиент
-    float smoothGradient(float t) {
-      t = clamp(t, 0.0, 1.0);
-      return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+    this.ctx.restore();
+    
+    // 4. Рисуем фоновое изображение ЗА ПРЕДЕЛАМИ карты
+    if (this.backgroundImage) {
+        const originalImgWidth = this.backgroundImage.width;
+        const originalImgHeight = this.backgroundImage.height;
+        
+        const imgWidth = originalImgWidth * bgScale;
+        const imgHeight = originalImgHeight * bgScale;
+        
+        const viewLeft = this.nodeX - this.canvasWidth / 2 / this.viewZoom;
+        const viewTop = this.nodeY - this.canvasHeight / 2 / this.viewZoom;
+        const viewWidth = this.canvasWidth / this.viewZoom;
+        const viewHeight = this.canvasHeight / this.viewZoom;
+        
+        const startX = Math.floor(viewLeft / imgWidth) * imgWidth;
+        const startY = Math.floor(viewTop / imgHeight) * imgHeight;
+        
+        const repeatX = Math.ceil(viewWidth / imgWidth) + 2;
+        const repeatY = Math.ceil(viewHeight / imgHeight) + 2;
+        
+        for (let i = 0; i < repeatX; i++) {
+            for (let j = 0; j < repeatY; j++) {
+                const x = startX + i * imgWidth;
+                const y = startY + j * imgHeight;
+                this.ctx.drawImage(this.backgroundImage, x, y, imgWidth, imgHeight);
+            }
+        }
     }
+    
+    // 5. Накладываем красный оттенок ТОЛЬКО за пределами карты
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(this.nodeX - this.canvasWidth / 2 / this.viewZoom, 
+                  this.nodeY - this.canvasHeight / 2 / this.viewZoom, 
+                  this.canvasWidth / this.viewZoom, 
+                  this.canvasHeight / this.viewZoom);
+    this.ctx.rect(mapLeft, mapTop, mapWidth, mapHeight);
+    this.ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+    this.ctx.fill("evenodd");
+    this.ctx.restore();
+    
+    // 6. Рисуем широкую красную границу карты
+    this.ctx.strokeStyle = "#FF0000";
+    this.ctx.lineWidth = 20;
+    this.ctx.strokeRect(mapLeft, mapTop, mapWidth, mapHeight);
+    
+    this.ctx.restore();
+}
 
-    // Дизеринг против banding
-    float noise(vec2 p) {
-      return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+// Добавьте в конструктор класса Game:
+// this.backgroundImage = null;
+
+// И добавьте метод для загрузки фона:
+loadBackground() {
+    this.backgroundImage = new Image();
+    this.backgroundImage.src = "bg54.jpg";
+    this.backgroundImage.onload = () => {
+        console.log("Background loaded");
+    };
+    this.backgroundImage.onerror = () => {
+        console.error("Failed to load background image");
+    };
+}
+    
+    drawGameScene() {
+        var a, oldtime = Date.now();
+        ++this.cb;
+        this.timestamp = oldtime;
+        if (!window.fpsLastTime) {
+            window.fpsLastTime = oldtime;
+            window.fpsCount = 0;
+            window.currentFPS = 0;
+        }
+        window.fpsCount++;
+        if (oldtime - window.fpsLastTime >= 900) {
+            window.currentFPS = Math.round(window.fpsCount * 1000 / (oldtime - window.fpsLastTime));
+            window.fpsCount = 0;
+            window.fpsLastTime = oldtime;
+        }
+        
+        if (0 < this.playerCells.length) {
+            this.calcViewZoom();
+            var c = a = 0;
+            if (!this.mainCell || Date.now() - this.mainCellLockTime > 100) {
+                let oldest = this.playerCells[0];
+                for (let i = 1; i < this.playerCells.length; i++) {
+                    if (this.playerCells[i].id < oldest.id) {
+                        oldest = this.playerCells[i];
+                    }
+                }
+                this.mainCell = oldest;
+                this.mainCellLockTime = Date.now();
+            }
+            let mainCell = this.mainCell;
+            if (mainCell) {
+                mainCell.updatePos();
+                a = mainCell.x;
+                c = mainCell.y;
+            }
+            this.posX = a;
+            this.posY = c;
+            this.posSize = this.viewZoom;
+            this.nodeX = (this.nodeX + a) / 2;
+            this.nodeY = (this.nodeY + c) / 2;
+        } else {
+            this.nodeX = (29 * this.nodeX + this.posX) / 30;
+            this.nodeY = (29 * this.nodeY + this.posY) / 30;
+            this.viewZoom = (9 * this.viewZoom + this.posSize * this.viewRange()) / 10;
+        }
+        this.mouseCoordinateChange();
+        this.drawGrid();
+        this.ctx.save();
+        this.ctx.translate(this.canvasWidth / 2, this.canvasHeight / 2);
+        this.ctx.scale(this.viewZoom, this.viewZoom);
+        this.ctx.translate(-this.nodeX, -this.nodeY);
+        
+        for (let d = 0; d < this.nodelist.length; d++) this.nodelist[d].drawOneCell(this.ctx);
+        
+        this.ctx.restore();
+        this.lbCanvas && this.lbCanvas.width && this.ctx.drawImage(this.lbCanvas, this.canvasWidth - this.lbCanvas.width - 10, 10);
+        if (this.chatCanvas != null) this.ctx.drawImage(this.chatCanvas, 0, this.canvasHeight - this.chatCanvas.height - 50);
+        
+        this.userScore = Math.max(this.userScore, this.calcUserScore());
+        let displayText = '';
+        if (this.userScore > 0) {
+            displayText += 'Score: ' + ~~(this.userScore / 100);
+        }
+        if (window.currentFPS > 0) {
+            if (displayText) displayText += ' | ';
+            displayText += 'FPS: ' + window.currentFPS;
+        }
+		
+        if (this.ping > 0) {
+            if (displayText) displayText += '  |  ';
+            displayText += 'Ping: ' + this.ping;
+        }
+        if (displayText) {
+            if (null == this.scoreText) {
+                this.scoreText = new UText(24, '#FFFFFF');
+            }
+            this.scoreText.setValue(displayText);
+            let rendered = this.scoreText.render();
+            let textWidth = rendered.width;
+            this.ctx.globalAlpha = 0.2;
+            this.ctx.fillStyle = '#000000';
+            this.ctx.fillRect(10, 10, textWidth + 20, 34);
+            this.ctx.globalAlpha = 1;
+            this.ctx.drawImage(rendered, 15, 15);
+        }
+        var deltatime = Date.now() - oldtime;
+        deltatime > 1E3 / 60 ? this.z -= .01 : deltatime < 1E3 / 65 && (this.z += .01);
+        .4 > this.z && (this.z = .4);
+        1 < this.z && (this.z = 1);
     }
-
-    void main() {
-      vec2 uv = vUvs;
-      float dist = length(uv - uCenter); // 0..~0.707
-
-      // Нормализуем расстояние: 0 = центр, 1 = угол
-      float t = dist / 0.65; 
-
-      // Инвертируем: центр = 1, края = 0
-      float intensity = 0.9 - smoothGradient(t);
-
-      // Цвета как на скрине
-      vec3 centerColor = vec3(0.075, 0.153, 0.271); // #132745 — центр
-      vec3 edgeColor   = vec3(0.0, 0.0, 0.0);       // #000000 - край
-
-      vec3 color = mix(edgeColor, centerColor, intensity);
-
-      // Дизеринг
-      color += (noise(uv * 1200.0) - 0.5) * 0.018;
-
-      gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+    
+    calcUserScore() {
+        for (var score = 0, i = 0; i < this.playerCells.length; i++) score += this.playerCells[i].nSize * this.playerCells[i].nSize;
+        return score;
     }
-  `, {
-                uCenter: [0.5, 0.5]
+    
+    drawChatBoard() {
+        if (this.hideChat) {
+            this.chatCanvas = null;
+            return;
+        }
+        this.chatCanvas = document.createElement("canvas");
+        var ctx = this.chatCanvas.getContext("2d");
+        var scaleFactor = Math.min(Math.max(this.canvasWidth / 1200, 0.75), 1);
+        this.chatCanvas.width = 1E3 * scaleFactor;
+        this.chatCanvas.height = 550 * scaleFactor;
+        ctx.scale(scaleFactor, scaleFactor);
+        var nowtime = Date.now();
+        var lasttime = 0;
+        if (this.chatBoard.length >= 1)
+            lasttime = this.chatBoard[this.chatBoard.length - 1].time;
+        else return;
+        var deltat = nowtime - lasttime;
+        ctx.globalAlpha = 0.8 * Math.exp(-deltat / 25000);
+        var len = this.chatBoard.length;
+        var from = len - 15;
+        if (from < 0) from = 0;
+        for (var i = 0; i < (len - from); i++) {
+            var chatName = new UText(18, this.chatBoard[i + from].color);
+            chatName.setValue(this.chatBoard[i + from].name);
+            var width = chatName.getWidth();
+            var a = chatName.render();
+            ctx.drawImage(a, 15, this.chatCanvas.height / scaleFactor - 24 * (len - i - from));
+            var chatText = new UText(18, '#666666');
+            chatText.setValue(': ' + this.chatBoard[i + from].message);
+            a = chatText.render();
+            ctx.drawImage(a, 15 + width, this.chatCanvas.height / scaleFactor - 24 * (len - from - i));
+        }
+    }
+    
+    drawLeaderBoard() {
+        this.lbCanvas = null;
+        if (this.leaderBoard.length === 0) return;
+        this.lbCanvas = document.createElement("canvas");
+        var ctx = this.lbCanvas.getContext("2d");
+        var boardLength = 60;
+        var myRank = null;
+        for (var i = 0; i < this.leaderBoard.length; i++) {
+            if (this.playerCells.some(cell => cell.id === this.leaderBoard[i].id)) {
+                myRank = i + 1;
+                break;
+            }
+        }
+        var visible = this.leaderBoard.slice(0, 10);
+        if (myRank && myRank > 10) {
+            var myEntry = this.leaderBoard[myRank - 1];
+            visible.push({
+                name: this.playerCells[0]?.name,
+                id: this.playerCells[0]?.id ?? 0,
+                level: myEntry?.level ?? -1,
+                xp: myEntry?.xp ?? 0
             });
-
-            const bg = new PIXI.Mesh(geometry, shader);
-            bg.position.set(0, 0);
-            bg.zIndex = -1000;
-            bg.visible = this.core.settings.background;
-            this.stage.addChild(bg);
-            this.backgroundSprite = bg;
         }
-
-
-
-
-        performHueShifting() {
-            this.hueDegree += 1
-            if (this.hueDegree > 360) this.hueDegree = 0
-            this.colorMatrix.hue(this.hueDegree)
-            this.hueShiftingRAF = requestAnimationFrame(this.performHueShifting.bind(this))
-        }
-
-        drawGrid() {
-            if (this.gridSprite) this.gridSprite.destroy()
-
-            const border = this.core.net.border
-            const g = new PIXI.Graphics()
-            const width = 100
-            const height = 100
-            g.lineStyle(10, 0x333333, 1)
-            g.moveTo(width, 0)
-            g.lineTo(0, 0)
-            g.moveTo(width / 2, height / 2)
-            g.lineTo(width / 2, -height / 2)
-            const texture = this.renderer.generateTexture(g, {
-                scaleMode: PIXI.SCALE_MODES.LINEAR,
-                resolution: 1,
-                region: new PIXI.Rectangle(0, 0, width / 2, height / 2)
-            })
-            texture.baseTexture.mipmapMode = PIXI.MIPMAP_MODES.ON
-            this.gridSprite = new PIXI.TilingSprite(texture, border.width, border.height)
-            this.gridSprite.position.set(-border.width / 2, -border.height / 2)
-            this.gridSprite.visible = this.core.settings.grid
-
-            this.stage.addChild(this.gridSprite)
-        }
-
-        drawSectors() {
-            if (this.sectorContainer) this.sectorContainer.destroy()
-
-            const labels = []
-            const rows = 5
-            const cols = 5
-            const sectorSize = this.core.net.border.width / 5
-            this.sectorContainer = new PIXI.Container()
-            for (let row = 0; row < rows; row++) {
-                labels[row] = []
-                for (let col = 0; col < cols; col++) {
-                    const square = new PIXI.Graphics()
-                    square.lineStyle(100, 0x444444)
-                    square.drawRect(0, 0, sectorSize, sectorSize);
-                    square.position.set(col * sectorSize, row * sectorSize)
-                    const label = new PIXI.Text(String.fromCharCode(65 + row) + (col + 1), {
-                        fontFamily: 'Ubuntu, Arial, sans-serif',
-                        fontWeight: '700',
-                        fontSize: 1024,
-                        fill: 0x444444
-                    })
-                    label.position.set(
-                        col * sectorSize + (sectorSize - label.width) / 2,
-                        row * sectorSize + (sectorSize - label.height) / 2
-                    )
-                    const sector = new PIXI.Container()
-                    sector.addChild(square, label)
-                    this.sectorContainer.addChild(sector)
-                }
+        boardLength += 24 * visible.length;
+        var scale = Math.min(0.22 * this.canvasHeight, Math.min(200, 0.3 * this.canvasWidth)) * 0.005;
+        this.lbCanvas.width = 200 * scale;
+        this.lbCanvas.height = boardLength * scale;
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, 200, boardLength);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "30px Ubuntu";
+        ctx.textAlign = "center";
+        ctx.fillText("Leaderboard", 100, 40);
+        ctx.textAlign = "left";
+        ctx.font = "20px Ubuntu";
+        for (var i = 0; i < visible.length; i++) {
+            var entry = visible[i];
+            var name = entry.name || "An unnamed cell";
+            if (!this.showName) name = "An unnamed cell";
+            var isMe = this.playerCells.some(cell => cell.id === entry.id);
+            if (isMe && this.playerCells[0]?.name) {
+                name = this.playerCells[0].name;
             }
-            this.sectorContainer.position.set(-1 * sectorSize * 5 / 2, -1 * sectorSize * 5 / 2)
-            this.sectorContainer.visible = this.core.settings.sectors
-
-            this.stage.addChild(this.sectorContainer)
-        }
-
-        initMinimap() {
-            const view = this.minimapView = document.getElementById("minimap-view")
-            this.minimapRenderer = PIXI.autoDetectRenderer({
-                view,
-                width: 250,
-                height: 250,
-                backgroundAlpha: 0,
-                antialias: false
-            })
-            const sprite = this.minimapEntity = new PIXI.Sprite(PIXI.Texture.WHITE)
-            sprite.width = 10
-            sprite.height = 10
-            sprite.anchor.set(.5)
-            const stage = this.minimapStage = new PIXI.Container()
-            stage.addChild(sprite)
-        }
-
-        initRenderer() {
-            const view = this.view = document.getElementById("view")
-            this.renderer = PIXI.autoDetectRenderer({
-                view,
-                width: innerWidth,
-                height: innerHeight,
-                antialias: true,
-                resolution: window.devicePixelRatio || 1,
-                powerPreference: 'high-performance'
-            })
-            this.stage = new PIXI.Container()
-            this.stage.sortableChildren = true
-
-            const circle = new PIXI.Graphics()
-            circle.beginFill(0xffffff)
-            circle.drawCircle(256, 256, 256)
-            circle.endFill();
-
-            const star = new PIXI.Graphics()
-                .beginFill(0xffffff)
-                .lineStyle(10, 0x777777, 1)
-                .drawPolygon(new Star(256, 256, 30, 256, 220, 0))
-                .endFill();
-
-            const cellRenderTexture = PIXI.RenderTexture.create({ width: 512, height: 512 })
-            this.renderer.render(circle, { renderTexture: cellRenderTexture })
-            cellRenderTexture.baseTexture.mipmapMode = PIXI.MIPMAP_MODES.ON
-
-
-            this.textures = { cell: cellRenderTexture }
-
-            Cell.SPRITE = new PIXI.Sprite(cellRenderTexture)
-        }
-
-
-        loop(now = performance.now()) {
-            this.now = Date.now();
-
-            // Оптимизация: убрали slice(0) - итерируемся напрямую по массиву
-            // Оптимизация: добавляем frustum culling для видимых клеток
-            const cam = this.camera;
-            const viewWidth = innerWidth / cam.s;
-            const viewHeight = innerHeight / cam.s;
-            const viewLeft = cam.x - viewWidth / 2;
-            const viewRight = cam.x + viewWidth / 2;
-            const viewTop = cam.y - viewHeight / 2;
-            const viewBottom = cam.y + viewHeight / 2;
-
-            // Обновляем только видимые клетки и проверяем видимость
-            for (let i = 0, len = this.cells.length; i < len; i++) {
-                const cell = this.cells[i];
-                if (!cell || cell.destroyed) continue;
-
-                // Frustum culling: проверяем видимость клетки
-                const cellLeft = cell.x - cell.r;
-                const cellRight = cell.x + cell.r;
-                const cellTop = cell.y - cell.r;
-                const cellBottom = cell.y + cell.r;
-
-                const isVisible = !(cellRight < viewLeft || cellLeft > viewRight ||
-                    cellBottom < viewTop || cellTop > viewBottom);
-
-                if (isVisible !== cell._visible) {
-                    cell._visible = isVisible;
-                    cell.sprite.visible = isVisible;
-                }
-
-                // Обновляем только видимые клетки
-                if (isVisible) {
-                    cell.update(this.now);
-                }
+            ctx.fillStyle = isMe ? "#FFAAAA" : "#FFFFFF";
+            var text = (!this.noRanking ? (i + 1) + ". " : "") + name;
+            if (isMe && myRank > 10 && i === visible.length - 1) {
+                text = myRank + ". " + name;
             }
-
-            this.updateCamera();
-
-            this.renderer.render(this.stage);
-            this.minimapRenderer.render(this.minimapStage);
-
-            // >>> Подсчёт FPS
-            this._fpsFrames++;
-            const dt = now - this._fpsLast;
-            if (dt >= this._fpsUpdateMs) {
-                this.core.stats.fps = (this._fpsFrames * 1000) / dt;
-                this._fpsFrames = 0;
-                this._fpsLast = now;
+            var w = ctx.measureText(text).width;
+            var x = (w > 190) ? 5 : 100 - w / 2;
+            ctx.fillText(text, x, 70 + 24 * i);
+        }
+    }
+    
+    normalizeFractlPart(n) {
+        return (n % (Math.PI * 2)) / (Math.PI * 2);
+    }
+    
+    updateNodes(reader) {
+        this.timestamp = Date.now();
+        this.ua = false;
+        for (let killedId; (killedId = reader.uint32());) {
+            const killer = this.nodes[reader.uint32()];
+            const killedNode = this.nodes[killedId];
+            if (killer && killedNode) {
+                killedNode.destroy();
+                killedNode.ox = killedNode.x;
+                killedNode.oy = killedNode.y;
+                killedNode.oSize = killedNode.size;
+                killedNode.nx = killer.x;
+                killedNode.ny = killer.y;
+                killedNode.nSize = killedNode.size;
+                killedNode.updateTime = this.timestamp;
             }
-
-            requestAnimationFrame(this.loop);
         }
-
-
-        clear() {
-            this.stage.removeChildren()
-            this.cells = []
-            this.cellsByID = new Map()
-            this.ownedCells = []
-        }
-
-
-        updateCamera() {
-            const hasCells = this.ownedCells.length > 0;
-            const lim = hasCells ? this.zoomLimits.player : this.zoomLimits.spectate;
-            this.zoom = Math.max(lim.min, Math.min(lim.max, this.zoom));
-
-            // Оптимизация: кэшируем ownedCells для избежания повторных обращений к Map
-            const ownedCount = this.ownedCells.length;
-            let score = 0;
-            let sumR = 0;
-            let targetX = 0;
-            let targetY = 0;
-
-            if (ownedCount > 0) {
-                // --- есть клетки: оптимизированный цикл ---
-                let validCells = 0;
-
-                const cell = this.cellsByID.get(this.ownedCells[0]);
-                // if (!cell || cell.destroyed) continue;
-
-                if (!cell.destroyed) {
-                    validCells++;
-                    const rSquared = cell.r * cell.r;
-                    score += ~~(rSquared / 100);
-                    targetX += cell.x;
-                    targetY += cell.y;
-                    sumR += cell.r;
-                }
-
-                if (validCells > 0) {
-                    this.camera.target.x = targetX / validCells;
-                    this.camera.target.y = targetY / validCells;
-                    this.calcViewZoom(sumR);
-                }
+        for (let nodeid; (nodeid = reader.uint32());) {
+            const type = reader.uint8();
+            let posX = 0, posY = 0, size = 0, playerId = 0;
+            if (type === 1) {
+                posX = this.leftPos + (this.rightPos * 2) * this.normalizeFractlPart(nodeid);
+                posY = this.topPos + (this.bottomPos * 2) * this.normalizeFractlPart(nodeid * nodeid);
             } else {
-                // --- нет клеток: отдаляем зум и делаем более плавное следование ---
-                let targetZoom = this.viewRange() * 0.2
-                this.viewZoom = (9 * this.viewZoom + targetZoom) / 10;
+                if (type === 0) playerId = reader.uint32();
+                posX = reader.int32();
+                posY = reader.int32();
+                size = reader.uint16();
             }
-
-            // сглаживание: при клетках /2, без клеток /7
-            const followDiv = (ownedCount > 0) ? 2 : 14;
-
-            // позиция камеры — мягкое следование
-            this.camera.x += (this.camera.target.x - this.camera.x) / followDiv;
-            this.camera.y += (this.camera.target.y - this.camera.y) / followDiv;
-
-            // масштаб камеры = viewZoom; сглаживаем тем же коэффициентом
-            this.camera.target.s = this.viewZoom;
-            this.camera.s += (this.camera.target.s - this.camera.s) / followDiv;
-
-            // Оптимизация: обновляем stage только если значения изменились
-            if (this._lastPivotX !== this.camera.x || this._lastPivotY !== this.camera.y) {
-                this.stage.pivot.set(this.camera.x, this.camera.y);
-                this._lastPivotX = this.camera.x;
-                this._lastPivotY = this.camera.y;
-            }
-
-            if (this._lastScale !== this.camera.s) {
-                this.stage.scale.set(this.camera.s);
-                this._lastScale = this.camera.s;
-            }
-
-            // position всегда обновляем (может измениться размер окна)
-            this.stage.position.set(innerWidth / 2, innerHeight / 2);
-
-            this.camera.score = score;
-        }
-
-
-
-    }
-
-    class Star extends PIXI.Polygon {
-        constructor(x, y, points, radius, innerRadius, rotation = 0) {
-            innerRadius = innerRadius || radius / 2
-
-            const startAngle = (-1 * Math.PI / 2) + rotation
-            const len = points * 2
-            const delta = PIXI.PI_2 / len
-            const polygon = []
-
-            for (let i = 0; i < len; i++) {
-                const r = i % 2 ? innerRadius : radius
-                const angle = (i * delta) + startAngle
-
-                polygon.push(
-                    x + (r * Math.cos(angle)),
-                    y + (r * Math.sin(angle))
-                );
-            }
-
-            super(polygon)
-        }
-    }
-
-    class UserInterface {
-
-        constructor(core) {
-            this.core = core
-
-            this.modalSystem = new ModalSystem()
-
-            this.mouse = {
-                x: 0,
-                y: 0
-            }
-
-            this.keysPressed = {};
-            this.ejectInterval = null;
-
-            this.userInterface = document.getElementById("user-interface")
-            this.playButton = document.getElementById("play")
-            this.spectateButton = document.getElementById("spectate")
-            this.settingsButton = document.getElementById("settings")
-            this.nameInput = document.getElementById("name")
-            this.serversButton = document.getElementById("servers")
-            this.scoreElement = document.getElementById("score")
-            this.fpsElement = document.getElementById("fps")
-            this.leaderboard = document.getElementById("leaderboard")
-            this.chatField = document.getElementById("chat-field")
-            this.chatContent = document.getElementById("chat-content")
-            setInterval(() => {
-                this.scoreElement.innerHTML = `Score: ${this.core.app.camera.score}`;
-                // добавим FPS прямо к Ping
-                const fps = this.core.stats?.fps || 0;
-                this.fpsElement.innerHTML = `Ping: ${this.core.net.ping} FPS: ${fps.toFixed(0)}`;
-            }, 40);
-            this.nameInput.value = this.core.store.name
-            this.addEvents()
-        }
-
-        addEvents() {
-            this.onPlay = this.onPlay.bind(this)
-            this.onSpectate = this.onSpectate.bind(this)
-            this.onSettings = this.onSettings.bind(this)
-            this.onKeyDown = this.onKeyDown.bind(this)
-            this.onNameChange = this.onNameChange.bind(this)
-            this.onMouseMove = this.onMouseMove.bind(this)
-            this.onResize = this.onResize.bind(this)
-            this.onScroll = this.onScroll.bind(this)
-            this.onServers = this.onServers.bind(this)
-            this.onKeyUp = this.onKeyUp.bind(this)
-
-            this.playButton.addEventListener("click", this.onPlay)
-            this.spectateButton.addEventListener("click", this.onSpectate)
-            this.settingsButton.addEventListener("click", this.onSettings)
-            this.serversButton.addEventListener("click", this.onServers)
-            addEventListener("keydown", this.onKeyDown);
-            addEventListener("keyup", this.onKeyUp);
-            this.nameInput.addEventListener("change", this.onNameChange)
-            this.core.app.view.addEventListener("mousemove", this.onMouseMove)
-            this.core.app.view.addEventListener('wheel', this.onScroll, {
-                passive: true
-            })
-            const updateMouseAim = () => {
-
-                const X = (CORE.ui.mouse.x - innerWidth / 2) / CORE.app.camera.s + CORE.app.camera.x;
-                const Y = (CORE.ui.mouse.y - innerHeight / 2) / CORE.app.camera.s + CORE.app.camera.y;
-
-                let x = X < CORE.net.border.right ? X : CORE.net.border.right;
-                let y = Y < CORE.net.border.bottom ? Y : CORE.net.border.bottom;
-                x = -CORE.net.border.right > x ? -CORE.net.border.right : x;
-                y = -CORE.net.border.bottom > y ? -CORE.net.border.bottom : y;
-
-                // change cords
-                CORE.app.camera.target.x = x;
-                CORE.app.camera.target.y = y;
-
-            };
-
-            this.core.app.view.addEventListener("mousedown", () => {
-                if (!CORE.app.ownedCells.length) {
-                    updateMouseAim();
-                    CORE.net.sendUint8(1); // CLIENT_TO_SERVER.SPECTATE
+            const r = reader.uint8();
+            const g = reader.uint8();
+            const b = reader.uint8();
+            let color = ((r << 16) | (g << 8) | b).toString(16).padStart(6, "0");
+            color = `#${color}`;
+            const spiked = reader.uint8();
+            const name = reader.utf8();
+            let node = this.nodes[nodeid];
+            if (node) {
+                node.updatePos();
+                node.ox = node.x;
+                node.oy = node.y;
+                node.oSize = node.size;
+                node.color = color;
+            } else {
+                node = new Cell(nodeid, posX, posY, size, color, name);
+                this.nodes[nodeid] = node;
+                this.nodelist.push(node);
+                node.ka = posX;
+                node.la = posY;
+                if (playerId === this.ownerPlayerId) {
+                    document.getElementById("overlays").style.display = "none";
+                    this.playerCells.push(node);
+                    if (this.playerCells.length === 1) {
+                        this.nodeX = node.x;
+                        this.nodeY = node.y;
+                    }
                 }
-            });
-            addEventListener("resize", this.onResize)
-            addEventListener("beforeunload", (event) => {
-                this.core.store.settings = this.core.settings.rawSettings
-                event.cancelBubble = true
-                event.returnValue = 'You sure you want to leave?'
-                event.preventDefault()
-            })
-
-            window.addEventListener("blur", () => {
-                this.resetKeys();
-            });
-
-            // 2. Страница стала скрытой (смена вкладки, открытие devtools и т.п.)
-            document.addEventListener("visibilitychange", () => {
-                if (document.hidden) this.resetKeys();
-            });
-
-            // 3. Открытие контекстного меню (ПКМ → KeyUp не приходит)
-            window.addEventListener("contextmenu", () => {
-                this.resetKeys();
-            });
-        }
-
-        resetKeys() {
-            // сбрасываем все клавиши
-            for (const key in this.keysPressed) {
-                this.keysPressed[key] = false;
             }
-
-            // останавливаем W-интервал
-            if (this.ejectInterval) {
-                clearInterval(this.ejectInterval);
-                this.ejectInterval = null;
-            }
+            node.nx = posX;
+            node.ny = posY;
+            node.setSize(size);
+            node.updateTime = this.timestamp;
+            if (name) node.setName(name);
         }
-
-
-
-
-
-
-
-        onPlay() {
-            this.core.net.spawn()
-            this.setPanelState(false)
+        while (reader.canRead) {
+            const node = this.nodes[reader.uint32()];
+            if (node) node.destroy();
         }
-
-        onSpectate() {
-            this.setPanelState(false)
-            this.core.net.spectate()
+        this.nodelist.sort((a, b) => {
+            const aPlayer = game.playerCells.includes(a) ? 1 : 0;
+            const bPlayer = game.playerCells.includes(b) ? 1 : 0;
+            if (aPlayer !== bPlayer) return bPlayer - aPlayer;
+            return b.id - a.id;
+        });
+        if (this.ua && this.playerCells.length === 0) {
+            this.showOverlays(false);
         }
+    }
+    
+    onUpdateXp(xp) {
+        console.log("XP updated to:", xp);
+    }
+}
 
-        onServers() {
-            let contentStr = `<div class="modal-servers-content">`
-            this.modalSystem.addModal(400, 500, "")
-        }
-
-        onSettings() {
-            let contentStr = `<div class="modal-settings-content">`
-            const settings = this.core.settings.rawSettings
-            for (const setting in settings) {
-                const inputValue = setting.replace(/[A-Z]/g, char => ' ' + char.toLowerCase())
-                contentStr += `
-            <div class="modal-settings-tile">
-            ${inputValue}<input type="checkbox" id="setting-${setting}" ${settings[setting] ? "checked" : ""}>
-            </div>
-            `
-            }
-            contentStr += `</div>`
-            this.modalSystem.addModal(200, null, contentStr)
-
-            for (const setting in settings) {
-                document.getElementById(`setting-${setting}`).addEventListener("click", () => {
-                    this.core.settings[setting] = !this.core.settings[setting]
-                })
-            }
-        }
-
-        updateLeaderboard() {
-            // Оптимизация: используем DocumentFragment для батчинга DOM операций
-            const leaderboard = this.core.net.leaderboardItems;
-            const ownedSet = new Set(this.core.app.ownedCells); // Set для O(1) поиска вместо O(n) some()
-
-            // Оптимизация: используем createDocumentFragment для батчинга
-            const fragment = document.createDocumentFragment();
-            const tempDiv = document.createElement('div');
-
-            for (const player of leaderboard) {
-                const lvl = (player.level != null && player.level >= 0) ? ` <span style="opacity:.8">[Lv ${player.level}]</span>` : "";
-                const isOwned = ownedSet.has(player.id);
-                tempDiv.innerHTML = `<div class="hud-leaderboard-tile ${isOwned ? "red-text" : ""}">${player.name}${lvl}</div>`;
-                fragment.appendChild(tempDiv.firstElementChild);
-            }
-
-            this.leaderboard.innerHTML = "";
-            this.leaderboard.appendChild(fragment);
-        }
-
-        updateChat() {
-            // Оптимизация: используем DocumentFragment для батчинга DOM операций
-            const messages = this.core.net.messages;
-            const fragment = document.createDocumentFragment();
-            const tempDiv = document.createElement('div');
-
-            for (const message of messages) {
-                tempDiv.innerHTML = `
-            <div class="hud-message-tile">
-                <span class="hud-message-item" style="color: rgb(${message.color.r}, ${message.color.g}, ${message.color.b})">
-                    ${message.name}: <span class="hud-message">${message.content}</span>
-                </span>
-            </div>`;
-                fragment.appendChild(tempDiv.firstElementChild);
-            }
-
-            this.chatContent.innerHTML = "";
-            this.chatContent.appendChild(fragment);
-        }
-
-        onServers() {
-            let contentStr = `<div class="modal-servers-content">`;
-            for (const ip in this.core.app.servers) {
-                const server = this.core.app.servers[ip];
-                contentStr += `
-      <div class="modal-servers-tile">
-        <div class="round">${server.name} - ${ip}</div>
-        <div id="server-${ip}" class="button center">Connect</div>
-      </div>`;
-            }
-            contentStr += `</div>`;
-            const modalID = this.modalSystem.addModal(300, null, contentStr);
-
-            // обработчик подключения
-            for (const ip in this.core.app.servers) {
-                // внутри UserInterface.onServers(), обработчик клика
-                document.getElementById(`server-${ip}`).addEventListener("click", async () => {
-                    this.modalSystem.removeModal(modalID);
-
-                    const url = `ws${location.protocol === 'https:' ? 's' : ''}://${ip}`;
-                    console.log("Switching server to:", url);
-
-                    // закрываем старый сокет
-                    if (this.core.net?.ws) {
-                        try { this.core.net.ws.close(); } catch (e) { }
-                        this.core.app.clear();
-                        this.core.net.reset();
-                    }
-
-                    // КАПЧА -> КОННЕКТ (гарантированно покажется)
-                    const token = await this.core.captcha.getToken();
-                    this.core.net.connect(url, token);
-                });
-
-
-            }
-
-        }
-
-
-        onMouseMove({
-            clientX,
-            clientY
-        }) {
-            this.mouse.x = clientX
-            this.mouse.y = clientY
-        }
-
-        onScroll({ deltaY }) {
-            const app = this.core.app;
-            const steps = (deltaY || 0) / 120;
-            app.zoom *= Math.pow(0.9, steps);
-        }
-
-
-        onKeyDown({
-            code
-        }) {
-            this.keysPressed[code] = true;
-
-            switch (code) {
-                case "Escape":
-                    this.setPanelState(true);
-                    break;
-                case "KeyW":
-                    if (!this.ejectInterval) {
-                        this.core.net.sendEject();
-                        this.ejectInterval = setInterval(() => {
-                            if (this.keysPressed["KeyW"]) this.core.net.sendEject();
-                            else clearInterval(this.ejectInterval);
-                        }, 50);
-                    }
-                    break;
-                case "Space":
-                    this.core.net.sendSplit();
-                    break;
-                case "Enter":
-                    if (document.activeElement === this.chatField) {
-                        const value = this.chatField.value;
-                        if (value !== "") this.core.net.sendChatMessage(value);
-                        this.chatField.blur();
-                        this.chatField.value = "";
-                    } else this.chatField.focus();
-                    break;
-                case "KeyE":
-                    this.core.net.sendE();
-                    break;
-                case "KeyR":
-                    this.core.net.sendR();
-                    break;
-                case "KeyT":
-                    this.core.net.sendT();
-                    break;
-                case "KeyP":
-                    this.core.net.sendP();
-                    break;
+class BinaryReader {
+    constructor(view) {
+        this.view = view;
+        this.byteLength = view.byteLength;
+        this.offset = 0;
+    }
+    get canRead() {
+        return this.offset < this.byteLength;
+    }
+    uint8() {
+        return this.view.getUint8(this.offset++);
+    }
+    int8() {
+        return this.view.getInt8(this.offset++);
+    }
+    uint16() {
+        return this.view.getUint16((this.offset += 2) - 2, true);
+    }
+    int16() {
+        return this.view.getInt16((this.offset += 2) - 2, true);
+    }
+    uint32() {
+        return this.view.getUint32((this.offset += 4) - 4, true);
+    }
+    int32() {
+        return this.view.getInt32((this.offset += 4) - 4, true);
+    }
+    utf16() {
+        let str = "";
+        let char;
+        while (this.canRead && (char = this.uint16())) str += String.fromCharCode(char);
+        return str;
+    }
+    utf8() {
+        let text = "";
+        for (let byte1; byte1 = this.canRead && this.view.getUint8(this.offset++);) {
+            if (byte1 <= 0x7F)
+                text += String.fromCharCode(byte1);
+            else if (byte1 <= 0xDF)
+                text += String.fromCharCode(((byte1 & 0x1F) << 6) | (this.view.getUint8(this.offset++) & 0x3F));
+            else if (byte1 <= 0xEF)
+                text += String.fromCharCode(((byte1 & 0x0F) << 12) | ((this.view.getUint8(this.offset++) & 0x3F) << 6) | (this.view.getUint8(this.offset++) & 0x3F));
+            else {
+                let codePoint = ((byte1 & 0x07) << 18) | ((this.view.getUint8(this.offset++) & 0x3F) << 12) | ((this.view.getUint8(this.offset++) & 0x3F) << 6) | (this.view.getUint8(this.offset++) & 0x3F);
+                if (codePoint >= 0x10000) {
+                    codePoint -= 0x10000;
+                    text += String.fromCharCode(0xD800 | (codePoint >> 10), 0xDC00 | (codePoint & 0x3FF));
+                } else text += String.fromCharCode(codePoint);
             }
         }
+        return text;
+    }
+}
 
-        onKeyUp({
-            code
-        }) {
-            this.keysPressed[code] = false;
-
-            if (code === "KeyW" && this.ejectInterval) {
-                clearInterval(this.ejectInterval);
-                this.ejectInterval = null;
+class UText {
+    constructor(size, color, stroke, strokeColor) {
+        this._value = "";
+        this._color = color || "#000000";
+        this._stroke = !!stroke;
+        this._strokeColor = strokeColor || "#000000";
+        this._size = size || 16;
+        this._canvas = null;
+        this._ctx = null;
+        this._dirty = false;
+        this._scale = 1;
+    }
+    setSize(v) {
+        if (this._size !== v) {
+            this._size = v;
+            this._dirty = true;
+        }
+    }
+    setScale(v) {
+        if (this._scale !== v) {
+            this._scale = v;
+            this._dirty = true;
+        }
+    }
+    setStrokeColor(v) {
+        if (this._strokeColor !== v) {
+            this._strokeColor = v;
+            this._dirty = true;
+        }
+    }
+    setValue(v) {
+        if (v !== this._value) {
+            this._value = v;
+            this._dirty = true;
+        }
+    }
+    render() {
+        if (this._canvas == null) {
+            this._canvas = document.createElement("canvas");
+            this._ctx = this._canvas.getContext("2d");
+        }
+        if (this._dirty) {
+            this._dirty = false;
+            const ctx = this._ctx;
+            const value = this._value;
+            const scale = this._scale;
+            const fontsize = this._size;
+            const font = fontsize + "px Ubuntu";
+            ctx.font = font;
+            const h = ~~(0.2 * fontsize);
+            const h2 = h * 0.5;
+            const wd = fontsize * 0.1;
+            this._canvas.width = ctx.measureText(value).width * scale + 3;
+            this._canvas.height = (fontsize + h) * scale;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.font = font;
+            ctx.globalAlpha = 1;
+            ctx.lineWidth = wd;
+            ctx.strokeStyle = this._strokeColor;
+            ctx.fillStyle = this._color;
+            ctx.scale(scale, scale);
+            if (this._stroke) {
+                ctx.strokeText(value, 0, fontsize - h2);
             }
+            ctx.fillText(value, 0, fontsize - h2);
         }
-
-        onResize() {
-            this.core.app.renderer.resize(innerWidth, innerHeight)
+        return this._canvas;
+    }
+    getWidth() {
+        if (!this._canvas || !this._ctx) {
+            this._canvas = document.createElement("canvas");
+            this._ctx = this._canvas.getContext("2d");
+            this._ctx.font = this._size + "px Ubuntu";
         }
+        return this._ctx.measureText(this._value).width + 6;
+    }
+}
 
-        setPanelState(show) {
-            if (show) this.userInterface.style.display = "grid"
-            else this.userInterface.style.display = "none"
+class Cell {
+    constructor(uid, ux, uy, usize, ucolor, uname) {
+        this.id = uid;
+        this.x = this.ox = ux;
+        this.y = this.oy = uy;
+        this.size = this.oSize = usize;
+        this.nx = 0;
+        this.ny = 0;
+        this.nSize = 0;
+        this.color = ucolor;
+        this.name = null;
+        this.nameCache = null;
+        this.sizeCache = null;
+        this.updateTime = 0;
+        this.drawTime = 0;
+        this.destroyed = false;
+        this.isEjected = false;
+        this.setName(uname);
+    }
+    destroy() {
+        const i = game.nodelist.indexOf(this);
+        if (i !== -1) game.nodelist.splice(i, 1);
+        delete game.nodes[this.id];
+        const p = game.playerCells.indexOf(this);
+        if (p !== -1) {
+            game.ua = true;
+            game.playerCells.splice(p, 1);
         }
+        const s = game.nodesOnScreen.indexOf(this.id);
+        if (s !== -1) game.nodesOnScreen.splice(s, 1);
+        this.destroyed = true;
+    }
+    getNameSize() {
+        return Math.max(~~(0.3 * this.size), 24);
+    }
+    setName(name) {
+        this.name = name;
+        if (!this.nameCache) {
+            this.nameCache = new UText(this.getNameSize(), "#FFFFFF", true, "#000000");
+        }
+        this.nameCache.setSize(this.getNameSize());
+        this.nameCache.setValue(this.name);
+    }
+    setSize(size) {
+        this.nSize = size;
+        if (!this.sizeCache) {
+            this.sizeCache = new UText(this.getNameSize() * 0.5, "#FFFFFF", true, "#000000");
+        }
+        this.sizeCache.setSize(this.getNameSize() * 0.5);
+    }
+    updatePos() {
+        if (this.id === 0) return 1;
+        const progress = Math.min(1, Math.max(0, (game.timestamp - this.updateTime) / game.interpSpeed));
+        if (this.destroyed && progress >= 1) {
+            const i = game.Cells.indexOf(this);
+            if (i !== -1) game.Cells.splice(i, 1);
+        }
+        this.x = this.ox + (this.nx - this.ox) * progress;
+        this.y = this.oy + (this.ny - this.oy) * progress;
+        this.size = this.oSize + (this.nSize - this.oSize) * progress;
+        return progress;
+    }
+    shouldRender() {
+        if (this.id === 0) return true;
+        const margin = this.size + 40;
+        const left = game.nodeX - game.canvasWidth / 2 / game.viewZoom;
+        const right = game.nodeX + game.canvasWidth / 2 / game.viewZoom;
+        const top = game.nodeY - game.canvasHeight / 2 / game.viewZoom;
+        const bottom = game.nodeY + game.canvasHeight / 2 / game.viewZoom;
+        return !(
+            this.x + margin < left ||
+            this.y + margin < top ||
+            this.x - margin > right ||
+            this.y - margin > bottom
+        );
+    }
+    getStrokeColor() {
+        const r = (parseInt(this.color.substr(1, 2), 16) * 0.9) | 0;
+        const g = (parseInt(this.color.substr(3, 2), 16) * 0.9) | 0;
+        const b = (parseInt(this.color.substr(5, 2), 16) * 0.9) | 0;
+        return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+    }
+    
+drawOneCell(ctx) {
+    if (!this.shouldRender()) return;
+    ctx.save();
+    this.drawTime = game.timestamp;
+    this.updatePos();
+    let renderSize = this.size;
+    if (renderSize === 0) renderSize = 20;
+    
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, renderSize, 0, 2 * Math.PI);
+    ctx.closePath();
 
-        onNameChange() {
-            const n = this.nameInput.value;
-            this.core.store.name = n;
+    // ===== SKIN =====
+    let skinImg = null;
+    if (game.showSkin && this.name) {
+        skinImg = game.getSkinForNick(this.name);
+    }
 
-            // ПРОГНАТЬ НОВОЕ ИМЯ ПО ВСЕМ СВОИМ ЖИВЫМ КЛЕТКАМ
-            for (const id of this.core.app.ownedCells) {
-                const cell = this.core.app.cellsByID.get(id);
-                if (!cell) continue;
-                cell.hasChanged = true; // разрешаем сеттеру перерисовать
-                cell.name = n;          // перерисует текст и скин
-            }
+    if (skinImg) {
+        ctx.save();
+        ctx.clip();
+        ctx.drawImage(skinImg, this.x - renderSize, this.y - renderSize, renderSize * 2, renderSize * 2);
+        ctx.restore();
+    } else {
+        const isFood = this.size < 20 && !game.playerCells.includes(this);
+        //const isMedium = this.size >= 0 && this.size <= 35 && !game.playerCells.includes(this);
+        
+        if (isFood) {
+            ctx.fillStyle = "#ff8800";
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "rgba(255, 150, 0, 0.8)";
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            ctx.beginPath();
+            ctx.arc(this.x - renderSize * 0.2, this.y - renderSize * 0.2, renderSize * 0.25, 0, 2 * Math.PI);
+            ctx.fillStyle = "rgba(255, 255, 200, 0.8)";
+            ctx.fill();
+       /* } else if (isMedium) {
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = this.color;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            ctx.beginPath();
+            ctx.arc(this.x - renderSize * 0.2, this.y - renderSize * 0.2, renderSize * 0.25, 0, 2 * Math.PI);
+            ctx.fillStyle = this.color;
+            ctx.fill();*/
+        } else {
+            ctx.fillStyle = this.color;
+            ctx.fill();
         }
     }
 
-
-    class main {
-        constructor() {
-            this.init();
+    const isPlayer = game.playerCells.includes(this);
+    const isMainCell = game.mainCell === this; // ТОЛЬКО главная клетка
+    
+    if (this.id !== 0) {
+        const x = ~~this.x;
+        const y = ~~this.y;
+        const nameSize = this.getNameSize();
+        const scale = Math.ceil(10 * game.viewZoom) * 0.1;
+        const invScale = 1 / scale;
+        
+        // ===== NAME - показываем имя ТОЛЬКО для главной клетки =====
+        if (isMainCell && this.name && this.nameCache) {
+            const cache = this.nameCache;
+            cache.setValue(this.name);
+            cache.setSize(nameSize);
+            cache.setScale(scale);
+            const canvas = cache.render();
+            const w = ~~(canvas.width * invScale);
+            const h = ~~(canvas.height * invScale);
+            ctx.drawImage(canvas, x - ~~(w / 2), y - ~~(h / 2), w, h);
         }
-
-        async init() {
-            this.app = new Application(this);
-            this.store = new Storage();
-            this.settings = new Settings(this);
-            this.captcha = new Captcha({ sitekey: "0x4AAAAAAA0keHJ56_KNR0MU", theme: "dark" });
-            this.net = new Network(this);
-            this.ui = new UserInterface(this);
-            this.app.servers = servers;
-            this.skins = new SkinManager(this);
-            this.account = { xp: 0, uid: localStorage.accountToken || "" };
-
-            await this.skins.init();
-
-            const url = location.hostname ? (`ws${location.protocol === 'https:' ? 's' : ''}://${Object.keys(servers)[0]}`) : "ws://localhost:3000/";
-            this.defaultServerUrl = url;
-            console.log("Prepared to connect to", url);
-
-            // капча -> токен -> коннект
-            const token = location.hostname ? await this.captcha.getToken() : "";
-            this.net.connect(url, token);
+        
+        // ===== MASS - показываем массу ТОЛЬКО для главной клетки =====
+        if (isMainCell && (game.showMass || true)) {
+            const mass = ~~(this.size * this.size * 0.01);
+            const cache = this.sizeCache;
+            cache.setValue(mass);
+            cache.setScale(scale);
+            const canvas = cache.render();
+            const w = ~~(canvas.width * invScale);
+            const h = ~~(canvas.height * invScale);
+            // Позиционируем массу под именем
+            let gy;
+            if (this.name) {
+                gy = y + ~~(nameSize * 0.6);
+            } else {
+                gy = y + ~~(h * 0.5);
+            }
+            ctx.drawImage(canvas, x - ~~(w / 2), gy, w, h);
         }
-
-
     }
+    ctx.restore();
+}
+}
 
-    global.CORE = new main();
-})(window);
+const game = new Game();
+onload = game.gameLoop.bind(game);
