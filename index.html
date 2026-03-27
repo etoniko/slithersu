@@ -596,26 +596,27 @@ mouseCoordinateChange() {
         this.drawChatBoard();
     }
     
-    sendMouseMove() {
-        var msg;
-        if (this.wsIsOpen()) {
-            msg = this.rawMouseX - this.canvasWidth / 2;
-            var b = this.rawMouseY - this.canvasHeight / 2;
-            if (64 <= msg * msg + b * b && !(.01 > Math.abs(this.oldX - this.X) && .01 > Math.abs(this.oldY - this.Y))) {
-                this.oldX = this.X;
-                this.oldY = this.Y;
-                msg = this.prepareData(21);
-                msg.setUint8(0, 16);
-                msg.setFloat64(1, this.X, true);
-                msg.setFloat64(9, this.Y, true);
-                msg.setUint32(17, 0, true);
-                this.wsSend(msg);
-            }
-        }
+sendMouseMove() {
+    var msg;
+    if (this.wsIsOpen()) {
+        // Отправляем screenX/screenY вместо worldX/worldY
+        const screenX = this.rawMouseX - this.canvasWidth / 2;
+        const screenY = this.rawMouseY - this.canvasHeight / 2;
+        
+        msg = this.prepareData(21);
+        msg.setUint8(0, 16);
+        msg.setFloat64(1, screenX, true);   // теперь screenX
+        msg.setFloat64(9, screenY, true);   // теперь screenY
+        msg.setUint32(17, 0, true);
+        this.wsSend(msg);
+        
+        this.oldScreenX = screenX;
+        this.oldScreenY = screenY;
+    }
     if (this.spacePressed && !this.isTyping) {
         this.sendUint8(17);
     }
-    }
+}
     
     getColorId(hex) {
         const index = this.cellColors.indexOf(hex);
