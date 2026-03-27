@@ -351,10 +351,18 @@
         if (this.zoom < 0.3) this.zoom = 0.3;
     }
     
-    mouseCoordinateChange() {
-        this.X = (this.rawMouseX - this.canvasWidth / 2) / this.viewZoom + this.nodeX;
-        this.Y = (this.rawMouseY - this.canvasHeight / 2) / this.viewZoom + this.nodeY;
-    }
+mouseCoordinateChange() {
+    // Получаем мировые координаты мыши
+    let worldX = (this.rawMouseX - this.canvasWidth / 2) / this.viewZoom + this.nodeX;
+    let worldY = (this.rawMouseY - this.canvasHeight / 2) / this.viewZoom + this.nodeY;
+    
+    // Ограничиваем координаты границами карты
+    worldX = Math.max(this.leftPos, Math.min(this.rightPos, worldX));
+    worldY = Math.max(this.topPos, Math.min(this.bottomPos, worldY));
+    
+    this.X = worldX;
+    this.Y = worldY;
+}
     
     hideOverlays() {
         this.hasOverlay = false;
