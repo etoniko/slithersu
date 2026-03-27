@@ -599,20 +599,31 @@ mouseCoordinateChange() {
 sendMouseMove() {
     var msg;
     if (this.wsIsOpen()) {
-        // Отправляем screenX/screenY вместо worldX/worldY
+        // Получаем экранные координаты (относительно центра canvas)
         const screenX = this.rawMouseX - this.canvasWidth / 2;
         const screenY = this.rawMouseY - this.canvasHeight / 2;
         
+        // ВАЖНО! Нужно учитывать zoom и viewZoom для правильного преобразования на сервере
+        // Но сервер будет преобразовывать screen -> world, поэтому отправляем чистые screen координаты
+        
+        // Проверка на слишком маленькое движение (анти-спам)
+        if (this.lastScreenX !== undefined && 
+            Math.abs(screenX - this.lastScreenX) < 5 && 
+            Math.abs(screenY - this.lastScreenY) < 5) {
+            return;
+        }
+        
+        this.lastScreenX = screenX;
+        this.lastScreenY = screenY;
+        
         msg = this.prepareData(21);
         msg.setUint8(0, 16);
-        msg.setFloat64(1, screenX, true);   // теперь screenX
-        msg.setFloat64(9, screenY, true);   // теперь screenY
+        msg.setFloat64(1, screenX, true);
+        msg.setFloat64(9, screenY, true);
         msg.setUint32(17, 0, true);
         this.wsSend(msg);
-        
-        this.oldScreenX = screenX;
-        this.oldScreenY = screenY;
     }
+    
     if (this.spacePressed && !this.isTyping) {
         this.sendUint8(17);
     }
