@@ -351,18 +351,10 @@
         if (this.zoom < 0.3) this.zoom = 0.3;
     }
     
-mouseCoordinateChange() {
-    // Получаем мировые координаты мыши
-    let worldX = (this.rawMouseX - this.canvasWidth / 2) / this.viewZoom + this.nodeX;
-    let worldY = (this.rawMouseY - this.canvasHeight / 2) / this.viewZoom + this.nodeY;
-    
-    // Ограничиваем координаты границами карты
-    worldX = Math.max(this.leftPos, Math.min(this.rightPos, worldX));
-    worldY = Math.max(this.topPos, Math.min(this.bottomPos, worldY));
-    
-    this.X = worldX;
-    this.Y = worldY;
-}
+    mouseCoordinateChange() {
+        this.X = (this.rawMouseX - this.canvasWidth / 2) / this.viewZoom + this.nodeX;
+        this.Y = (this.rawMouseY - this.canvasHeight / 2) / this.viewZoom + this.nodeY;
+    }
     
     hideOverlays() {
         this.hasOverlay = false;
@@ -596,38 +588,26 @@ mouseCoordinateChange() {
         this.drawChatBoard();
     }
     
-sendMouseMove() {
-    var msg;
-    if (this.wsIsOpen()) {
-        // Получаем экранные координаты (относительно центра canvas)
-        const screenX = this.rawMouseX - this.canvasWidth / 2;
-        const screenY = this.rawMouseY - this.canvasHeight / 2;
-        
-        // ВАЖНО! Нужно учитывать zoom и viewZoom для правильного преобразования на сервере
-        // Но сервер будет преобразовывать screen -> world, поэтому отправляем чистые screen координаты
-        
-        // Проверка на слишком маленькое движение (анти-спам)
-        if (this.lastScreenX !== undefined && 
-            Math.abs(screenX - this.lastScreenX) < 5 && 
-            Math.abs(screenY - this.lastScreenY) < 5) {
-            return;
+    sendMouseMove() {
+        var msg;
+        if (this.wsIsOpen()) {
+            msg = this.rawMouseX - this.canvasWidth / 2;
+            var b = this.rawMouseY - this.canvasHeight / 2;
+            if (64 <= msg * msg + b * b && !(.01 > Math.abs(this.oldX - this.X) && .01 > Math.abs(this.oldY - this.Y))) {
+                this.oldX = this.X;
+                this.oldY = this.Y;
+                msg = this.prepareData(21);
+                msg.setUint8(0, 16);
+                msg.setFloat64(1, this.X, true);
+                msg.setFloat64(9, this.Y, true);
+                msg.setUint32(17, 0, true);
+                this.wsSend(msg);
+            }
         }
-        
-        this.lastScreenX = screenX;
-        this.lastScreenY = screenY;
-        
-        msg = this.prepareData(21);
-        msg.setUint8(0, 16);
-        msg.setFloat64(1, screenX, true);
-        msg.setFloat64(9, screenY, true);
-        msg.setUint32(17, 0, true);
-        this.wsSend(msg);
-    }
-    
     if (this.spacePressed && !this.isTyping) {
         this.sendUint8(17);
     }
-}
+    }
     
     getColorId(hex) {
         const index = this.cellColors.indexOf(hex);
