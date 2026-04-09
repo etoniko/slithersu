@@ -16,11 +16,13 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://slither.su">
     <meta property="og:image" content="https://slither.su/og-image.jpg">
-    
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="/favicon.png">
     <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@700&display=swap" rel="stylesheet">
     <link href="https://api.agar.su/slith/style.css" rel="stylesheet">
 	<script src="https://api.agar.su/slith/smain.js"></script>
+	
     
     <script type="application/ld+json">
     {
@@ -35,84 +37,96 @@
 <body>
     <div id="overlays">
         <div id="helloDialog">
-                    <div id="title" data-en="Slither.su">slither.su</div>
-					<div id="hint">When longer, hold the mouse for a speed boost!</div>
+                    <div id="title">
+  <span class="slither">slither</span><span class="su">.su</span>
+  <div id="hint">When longer, hold the mouse for a speed boost!</div>
+</div>
+<div class="loger">
                     <input id="nick" class="form-control save" autocomplete="off" placeholder="Ник" data-en-placeholder="Nick" maxlength="16"/>
                     <button type="submit" id="play-btn" onclick="setNick(document.getElementById('nick').value); return false;" class="btn btn-play btn-primary btn-needs-server" data-en="Play">Играть</button>
+					</div>
 
         </div>
 		
 		
 		
-		                    <button onclick="
-    var s = document.getElementById('settings');
-    var i = document.getElementById('instructions');
-    if (s.style.display === 'none' || s.style.display === '') {
-        s.style.display = 'block';
-        i.style.display = 'none';
-    } else {
-        s.style.display = 'none';
-        i.style.display = 'block';
-    }"
-    id="settings-btn">
+<!-- Кнопка шестерёнки в правом верхнем углу -->
+<button id="settings-btn" class="settings-icon-btn">
+<i class='fa fa-gear'></i>
 </button>
 
-                <div id="settings" class="checkbox" style="display:none;">
-                    <div class="form-group" id="mainform">
-<button type="button" id="spectate-btn" onclick="setSpect(); return false;" style="width: 100%" class="btn btn-warning btn-spectate btn-needs-server" data-en="Spectate">Наблюдение</button>
-                        <br clear="both" />
-                    </div>
-<div style="margin: 6px;">
-    <label>
-        <input type="checkbox" class="save" data-box-id="1" onchange="setSkins(this.checked);" data-en="No skins">Без скинов
-    </label>
-    <label>
-        <input type="checkbox" class="save" data-box-id="2" onchange="setNames(!this.checked);" data-en="No names">Без ников
-    </label>
-    <label>
-        <input type="checkbox" class="save" data-box-id="3" onchange="setDarkTheme(this.checked);" data-en="Dark Theme">Тёмная тема
-    </label>
-    <label>
-        <input type="checkbox" class="save" data-box-id="4" onchange="setColors(this.checked);" data-en="No colors">Без цветов
-    </label>
-    <label>
-        <input type="checkbox" class="save" data-box-id="5" onchange="setShowMass(this.checked);" data-en="Show mass" checked>Показывать массу
-    </label>
-    <label>
-        <input type="checkbox" class="save" data-box-id="7" onchange="setChatHide(this.checked);" data-en="Close chat">Закрыть чат
-    </label>
-<div>
-    <label>
-        Speed: <b id="speedLabel">2 (Normal)</b>
-    </label>
-
-    <input 
-        type="range"
-        id="speedSlider"
-        min="1"
-        max="3"
-        step="1"
-        value="2"
-        oninput="setSpeedStage(this.value)"
-        style="width:100%;"
-    >
-
-    <div style="display:flex; justify-content:space-between; font-size:12px;">
-        <span>1</span>
-        <span>2</span>
-        <span>3</span>
+<!-- Улучшенная панель настроек (выезжает справа) -->
+<div id="settings" class="settings-panel">
+    <div class="settings-header">
+        <h3>Настройки</h3>
+        <button id="close-settings" class="close-btn">✕</button>
     </div>
-</div>
+    
+    <div class="settings-content">
 
+        <!-- Чекбоксы -->
+        <div class="checkbox-group">
+            <label class="setting-item">
+                <input type="checkbox" class="save" data-box-id="1" onchange="setSkins(this.checked);">
+                <span>Без скинов</span>
+            </label>
+            
+            <label class="setting-item">
+                <input type="checkbox" class="save" data-box-id="2" onchange="setNames(!this.checked);">
+                <span>Без ников</span>
+            </label>
+            
+            <label class="setting-item">
+                <input type="checkbox" class="save" data-box-id="3" onchange="setDarkTheme(this.checked);">
+                <span>Тёмная тема</span>
+            </label>
+            
+            <label class="setting-item">
+                <input type="checkbox" class="save" data-box-id="4" onchange="setColors(this.checked);">
+                <span>Без цветов</span>
+            </label>
+            
+            <label class="setting-item">
+                <input type="checkbox" class="save" data-box-id="5" onchange="setShowMass(this.checked);" checked>
+                <span>Показывать массу</span>
+            </label>
+            
+            <label class="setting-item">
+                <input type="checkbox" class="save" data-box-id="7" onchange="setChatHide(this.checked);">
+                <span>Закрыть чат</span>
+            </label>
+        </div>
 
-
-</div>
-                </div>
-				
-
-                    <select id="gamemode" class="form-control" onchange="setServer($(this).val());" required>
+        <!-- Скорость -->
+        <div class="speed-section">
+            <label class="speed-label">
+                Скорость: <b id="speedLabel">2 (Normal)</b>
+            </label>
+            <input 
+                type="range" 
+                id="speedSlider"
+                min="1" 
+                max="3" 
+                step="1" 
+                value="2"
+                oninput="setSpeedStage(this.value)"
+            >
+            <div class="speed-values">
+                <span>Медленно</span>
+                <span>Нормально</span>
+                <span>Быстро</span>
+            </div>
+        </div>
+		
+            <button type="button" id="spectate-btn" onclick="setSpect(); return false;" class="btn-spectate">
+                Наблюдение
+            </button>
+		                    <select id="gamemode" class="form-control" onchange="setServer($(this).val());" required>
                         <option value="ffa.agar.su:6009">FFA #1</option>
                     </select>
+    </div>
+</div>
+				
 	<footer id="footer"><a target="_blank" href="https://agar.su/privacy.html" data-en="privacy">политика</a><a target="_blank" href="https://agar.su/rules.html" data-en="rules"> · правила · </a><a target="_blank" href="https://agar.su/offer.html" data-en="offer">оферта</a></footer>	
 		
 		
@@ -129,6 +143,18 @@
     <canvas id="canvas"></canvas>
     <input type="text" id="chat_textbox" autocomplete="off"  placeholder="Нажмите Enter для чата" data-en-placeholder="Press Enter to chat" maxlength="200"/>
 	<script>
+	// Открытие и закрытие панели
+function toggleSettings() {
+    document.getElementById('settings').classList.toggle('open');
+}
+
+// Закрытие по крестику
+document.getElementById('close-settings').onclick = function() {
+    document.getElementById('settings').classList.remove('open');
+};
+
+// Открытие по кнопке шестерёнки
+document.getElementById('settings-btn').onclick = toggleSettings;
 (function () {
 
     var lang = (navigator.language || navigator.userLanguage || "en").toLowerCase();
