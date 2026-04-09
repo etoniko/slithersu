@@ -35,22 +35,16 @@
 <body>
     <div id="overlays">
         <div id="helloDialog">
-                <div class="form-group">
-                    <h2 id="title" data-en="Slither.su">Slither.su</h2>
-                </div>
-
-                <div class="form-group">
-                    <input id="nick" class="form-control save" placeholder="Ник" data-en-placeholder="Nick" maxlength="16"/>
-                    <select id="gamemode" class="form-control" onchange="setServer($(this).val());" required>
-                        <option value="ffa.agar.su:6009">FFA #1</option>
-                    </select>
-                    <br clear="both" />
-                </div>
-
-                <div class="form-group">
-
+                    <div id="title" data-en="Slither.su">slither.su</div>
+					<div id="hint">When longer, hold the mouse for a speed boost!</div>
+                    <input id="nick" class="form-control save" autocomplete="off" placeholder="Ник" data-en-placeholder="Nick" maxlength="16"/>
                     <button type="submit" id="play-btn" onclick="setNick(document.getElementById('nick').value); return false;" class="btn btn-play btn-primary btn-needs-server" data-en="Play">Играть</button>
-                    <button onclick="
+
+        </div>
+		
+		
+		
+		                    <button onclick="
     var s = document.getElementById('settings');
     var i = document.getElementById('instructions');
     if (s.style.display === 'none' || s.style.display === '') {
@@ -60,12 +54,8 @@
         s.style.display = 'none';
         i.style.display = 'block';
     }"
-    class="btn btn-info btn-settings" 
     id="settings-btn">
-    <i class="glyphicon glyphicon-cog"></i>
 </button>
-                    <br clear="both" />
-                </div>
 
                 <div id="settings" class="checkbox" style="display:none;">
                     <div class="form-group" id="mainform">
@@ -118,24 +108,15 @@
 
 </div>
                 </div>
+				
 
-            <div id="instructions">
-                <hr/>
-                <center>
-<span class="text-muted"
-data-en="Move your mouse to control your cell<br>Press <b>Space</b> to boost<br>Press">
-Двигайте мышь чтобы управлять клеткой<br>
-Нажмите <b>Space</b> чтобы ускориться
-</span>
-                </center>
-            </div>
-
-            <hr />
-            <div id="footer">
-                <a target="_blank" href="https://t.me/agarsu" class="text-muted">Telegram: @agarsu</a>
-            </div>
-<footer id="footer"><a target="_blank" href="https://agar.su/privacy.html" data-en="privacy">политика</a><a target="_blank" href="https://agar.su/rules.html" data-en="rules"> · правила · </a><a target="_blank" href="https://agar.su/offer.html" data-en="offer">оферта</a></footer>
-        </div>
+                    <select id="gamemode" class="form-control" onchange="setServer($(this).val());" required>
+                        <option value="ffa.agar.su:6009">FFA #1</option>
+                    </select>
+	<footer id="footer"><a target="_blank" href="https://agar.su/privacy.html" data-en="privacy">политика</a><a target="_blank" href="https://agar.su/rules.html" data-en="rules"> · правила · </a><a target="_blank" href="https://agar.su/offer.html" data-en="offer">оферта</a></footer>	
+		
+		
+		
     </div>
 
     <div id="connecting">
@@ -146,7 +127,7 @@ data-en="Move your mouse to control your cell<br>Press <b>Space</b> to boost<br>
     </div>
 
     <canvas id="canvas"></canvas>
-    <input type="text" id="chat_textbox" placeholder="Нажмите Enter для чата" data-en-placeholder="Press Enter to chat" maxlength="200"/>
+    <input type="text" id="chat_textbox" autocomplete="off"  placeholder="Нажмите Enter для чата" data-en-placeholder="Press Enter to chat" maxlength="200"/>
 	<script>
 (function () {
 
