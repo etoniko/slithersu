@@ -1,5 +1,5 @@
 import { Cell } from "../game/Cell.js";
-import { getLevel, normalizeFractlPart } from "../utils/math.js";
+import { getLevel, foodPositionFromId } from "../utils/math.js";
 import { prepareData, Writer, Reader, BinaryReader } from "../utils/binary.js";
 import { getMouseDelta } from "../input/coordinates.js";
 import { sanitizeNick } from "../utils/textFilter.js";
@@ -724,10 +724,9 @@ export class Network {
                 let playerId = 0;
 
                 if (type === 1) {
-                    const w = border.width || (border.right - border.left);
-                    const h = border.height || (border.bottom - border.top);
-                    posX = border.left + w * normalizeFractlPart(id);
-                    posY = border.top + h * normalizeFractlPart(id * id);
+                    const fp = foodPositionFromId(id, border);
+                    posX = fp.x;
+                    posY = fp.y;
                     const sizeRange = Math.max(1, this.foodMaxSize - this.foodMinSize);
                     size = this.foodMinSize + (id % sizeRange);
                 } else {

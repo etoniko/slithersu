@@ -126,7 +126,8 @@ export class Cell {
     _updateFoodLod(force = false) {
         if (!this.isFood || !this.sprite) return;
         const camS = this.core?.app?.camera?.s ?? 1;
-        const simple = camS < 0.42;
+        // На мобилках камера часто «дальше» — не выключаем блеск еды слишком рано
+        const simple = camS < 0.22;
         if (!force && this._foodSimple === simple) return;
         this._foodSimple = simple;
 

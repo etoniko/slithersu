@@ -379,9 +379,10 @@ void main() {
         g.lineTo(width / 2, -height / 2)
         const texture = this.renderer.generateTexture(g, {
             scaleMode: PIXI.SCALE_MODES.LINEAR,
-            resolution: 1,
+            resolution: this.renderDpr || this.renderer.resolution || 1,
             region: new PIXI.Rectangle(0, 0, width / 2, height / 2)
         })
+        texture.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR
         texture.baseTexture.mipmapMode = PIXI.MIPMAP_MODES.ON
         this.gridSprite = new PIXI.TilingSprite(texture, border.width, border.height)
         this.gridSprite.position.set(-border.width / 2, -border.height / 2)
@@ -516,16 +517,29 @@ void main() {
         const view = this.view = document.getElementById("view")
         const w = Math.max(1, Math.floor(window.visualViewport?.width || innerWidth));
         const h = Math.max(1, Math.floor(window.visualViewport?.height || innerHeight));
+        // На телефонах DPR часто 2–3 — не режем до 2, иначе картинка мыльная
+        const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+        this.renderDpr = dpr;
+
+        if (PIXI.settings) {
+            PIXI.settings.ROUND_PIXELS = false;
+            PIXI.settings.RESOLUTION = dpr;
+            if (PIXI.settings.SCALE_MODE != null) {
+                PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.LINEAR;
+            }
+        }
+
         this.renderer = PIXI.autoDetectRenderer({
             view,
             width: w,
             height: h,
             antialias: true,
-            resolution: Math.min(window.devicePixelRatio || 1, 2),
+            resolution: dpr,
             autoDensity: true,
             powerPreference: 'high-performance',
             backgroundColor: 0xffe8a8,
-            backgroundAlpha: 1
+            backgroundAlpha: 1,
+            hello: false
         })
         this.stage = new PIXI.Container()
         this.stage.sortableChildren = true
@@ -542,8 +556,15 @@ void main() {
             .drawPolygon(new Star(256, 256, 30, 256, 220, 0))
             .endFill();
 
-        const cellRenderTexture = PIXI.RenderTexture.create({ width: 512, height: 512 })
+        // Текстура клетки в DPR — чёткие круги на Retina
+        const cellRenderTexture = PIXI.RenderTexture.create({
+            width: 512,
+            height: 512,
+            resolution: dpr,
+            scaleMode: PIXI.SCALE_MODES.LINEAR
+        })
         this.renderer.render(circle, { renderTexture: cellRenderTexture })
+        cellRenderTexture.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR
         cellRenderTexture.baseTexture.mipmapMode = PIXI.MIPMAP_MODES.ON
 
 

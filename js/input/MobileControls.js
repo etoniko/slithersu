@@ -197,8 +197,8 @@ export class MobileControls {
     updatePinch(t0, t1) {
         const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY) || 1;
         const ratio = dist / this.pinchStartDist;
-        // развести = отдалить, свести = приблизить
-        let z = this.pinchStartZoom / ratio;
+        // пальцы врозь → приближение; вместе → отдаление
+        let z = this.pinchStartZoom * ratio;
         const lim = this.ui.core.app.zoomLimits?.player || { min: 0.2, max: 8 };
         z = Math.max(lim.min, Math.min(lim.max, z));
         this.ui.core.app.zoom = z;
