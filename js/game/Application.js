@@ -239,14 +239,28 @@ export class Application {
     initMinimap() {
         const view = this.minimapView = document.getElementById("minimap-view");
         if (!view) return;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        view.width = Math.floor(MINIMAP_SIZE * dpr);
-        view.height = Math.floor(MINIMAP_SIZE * dpr);
-        view.style.width = MINIMAP_SIZE + "px";
-        view.style.height = MINIMAP_SIZE + "px";
         this.minimapCtx = view.getContext("2d");
+        this.minimapCssSize = MINIMAP_SIZE;
+        this.syncMinimapSize();
+    }
+
+    /** Подгоняем буфер канваса под CSS-размер #minimap-grid (180 desktop / 72 mobile). */
+    syncMinimapSize() {
+        const view = this.minimapView;
+        if (!view) return;
+        const grid = document.getElementById("minimap-grid");
+        const css = Math.max(1, Math.round(grid?.clientWidth || view.clientWidth || MINIMAP_SIZE));
+        this.minimapCssSize = css;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
         this.minimapDpr = dpr;
-        this._minimapNeedsBorder = true;
+        const bw = Math.max(1, Math.floor(css * dpr));
+        if (view.width !== bw || view.height !== bw) {
+            view.width = bw;
+            view.height = bw;
+        }
+        // Не трогаем style.width — .hud-minimap растягивается на сетку (иначе 200≠180)
+        view.style.width = "";
+        view.style.height = "";
     }
 
     renderMinimap() {
@@ -254,18 +268,20 @@ export class Application {
         const border = this.core?.net?.border;
         if (!ctx || !border?.width) return;
 
+        this.syncMinimapSize();
+        const size = this.minimapCssSize || MINIMAP_SIZE;
         const dpr = this.minimapDpr || 1;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+        ctx.clearRect(0, 0, size, size);
 
         ctx.fillStyle = OUTSIDE_CSS;
-        ctx.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+        ctx.fillRect(0, 0, size, size);
 
         if (border.centerX != null) {
-            const r = border.width / 2;
-            const cx = ((border.centerX - border.left) / border.width) * MINIMAP_SIZE;
-            const cy = ((border.centerY - border.top) / border.height) * MINIMAP_SIZE;
-            const rr = r * (MINIMAP_SIZE / border.width);
+            const r = Math.min(border.width, border.height) / 2;
+            const cx = ((border.centerX - border.left) / border.width) * size;
+            const cy = ((border.centerY - border.top) / border.height) * size;
+            const rr = r * (size / Math.max(border.width, border.height));
 
             ctx.beginPath();
             ctx.arc(cx, cy, rr, 0, Math.PI * 2);
@@ -283,15 +299,16 @@ export class Application {
             const d = serverDots[i];
             if (!d) continue;
             if (ownerId && (d.pID >>> 0) === ownerId) continue;
-            const p = worldToMinimap(d.x, d.y, border);
+            const p = worldToMinimap(d.x, d.y, border, size);
             ctx.beginPath();
-            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, Math.max(2, size * 0.015), 0, Math.PI * 2);
             ctx.fill();
         }
 
-        const self = worldToMinimap(this.posX, this.posY, border);
+        const self = worldToMinimap(this.posX, this.posY, border, size);
+        const mark = Math.max(6, size * 0.04);
         ctx.fillStyle = "#ff4444";
-        ctx.fillRect(self.x - 4, self.y - 4, 8, 8);
+        ctx.fillRect(self.x - mark / 2, self.y - mark / 2, mark, mark);
     }
 
     updateMinimap() {

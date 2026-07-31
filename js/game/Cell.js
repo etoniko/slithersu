@@ -378,9 +378,11 @@ export class Cell {
 
         if (this._showName && this._name) {
             const entry = Cell._getNameCanvas(this._name);
+            // Как в Pixi: ник — дочерний спрайт клетки (локальный масштаб r/256)
             const invScale = Math.max(0.5, Math.min(1.35, 170 / Math.max(1, this.r)));
-            const dw = entry.cssW * invScale * 0.45;
-            const dh = entry.cssH * invScale * 0.45;
+            const cellScale = this.r / 256;
+            const dw = entry.cssW * invScale * cellScale;
+            const dh = entry.cssH * invScale * cellScale;
             ctx.globalAlpha = alpha * this.labelAlpha;
             ctx.drawImage(entry.canvas, this.x - dw / 2, this.y - dh / 2, dw, dh);
         }

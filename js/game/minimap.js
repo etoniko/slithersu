@@ -1,5 +1,5 @@
-/** Размер канваса миникарты (совпадает с #minimap-grid в CSS). */
-export const MINIMAP_SIZE = 200;
+/** Дефолтный CSS-размер миникарты (desktop #minimap-grid = 180px). */
+export const MINIMAP_SIZE = 180;
 
 /**
  * Мировые координаты → позиция маркера на миникарте.

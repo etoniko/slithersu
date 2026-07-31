@@ -1315,6 +1315,7 @@ export class UserInterface {
         const app = this.core.app;
         if (!app?.view || !app.resizeCanvas) return;
         app.resizeCanvas(w, h);
+        app.syncMinimapSize?.();
         // Сброс «улетевшего» зума после поворота/обновления на мобилке
         if (app.ownedCells.length === 0 && !app.isSpectating) {
             const z = app.zoom;
