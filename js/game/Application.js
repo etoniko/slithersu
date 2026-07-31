@@ -1,19 +1,24 @@
-import { Cell } from "./Cell.js";
-import { Star } from "./Star.js";
 import { MINIMAP_SIZE, worldToMinimap } from "./minimap.js";
 import { getMainSegmentId, sortSegmentIds } from "./segments.js";
 
+const OUTSIDE_CSS = "#ffe8a8";
+const GOLD_CSS = "#f0c84a";
+const GRID_CSS = "rgba(168,212,232,0.55)";
+const SECTOR_LINE = "rgba(126,184,208,0.35)";
+const SECTOR_LABEL = "#6a9fb0";
+const CYR_ROWS = ["А", "Б", "В", "Г", "Д"];
+
 export class Application {
     constructor(core) {
-        this.core = core
+        this.core = core;
 
-        this.initRenderer()
-        this.initMinimap()
+        this.initRenderer();
+        this.initMinimap();
 
-        this.cells = []
-        this.cellsByID = new Map()
-        this.ownedCells = []
-        this.dyingCells = []
+        this.cells = [];
+        this.cellsByID = new Map();
+        this.ownedCells = [];
+        this.dyingCells = [];
         this.camera = {
             x: 1,
             y: 1,
@@ -21,35 +26,27 @@ export class Application {
             w: 1,
             score: 0,
             mass: 0,
-            target: {
-                x: 1,
-                y: 1,
-                s: 1
-            }
-        }
-        // Лимиты зума: для игры и для спектатора
-        this.zoomLimits = {
-            player: { min: 0.2, max: 8 }, // когда у тебя есть клетки
-            spectate: { min: 0.04, max: 8 } // когда ты в спектате (без клеток)
+            target: { x: 1, y: 1, s: 1 }
         };
-        this.zoom = 0.7;      // колесо (как старый zoom)
-        this.viewZoom = 1;  // сглаженный итоговый масштаб
-        // >>> Добавь это:
+        this.zoomLimits = {
+            player: { min: 0.2, max: 8 },
+            spectate: { min: 0.04, max: 8 }
+        };
+        this.zoom = 0.7;
+        this.viewZoom = 1;
         this._fpsFrames = 0;
         this._fpsLast = performance.now();
-        this._fpsUpdateMs = 500; // усредняем каждые ~0.5 c
+        this._fpsUpdateMs = 500;
         this.core.stats = this.core.stats || {};
         this.core.stats.fps = 0;
-        // Кэш для оптимизации updateCamera
-        this._lastPivotX = 0;
-        this._lastPivotY = 0;
-        this._lastScale = 1;
         this._viewCssW = 0;
         this._viewCssH = 0;
         this._ownedSet = new Set();
         this._ownedSetKey = "";
         this._minimapFrame = 0;
         this._layersFrame = 0;
+        this._drawList = [];
+        this.mapReady = false;
         this.mainCell = null;
         this.mainCellLockTime = 0;
         this.posX = 0;
@@ -58,14 +55,13 @@ export class Application {
         this.isSpectating = false;
         this.boostEnergy = 1;
         this.isBoostActive = false;
-        /** Голова текущей жизни (мин. node id). */
         this.headCellId = null;
-        /** После смерти головы не берём хвост обратно в owned, пока не нажмём «Играть». */
         this.snakeEnded = false;
-        this.loop = this.loop.bind(this)
+        this.loop = this.loop.bind(this);
 
-        this.loop()
+        this.loop();
     }
+
     enterSpectateMode() {
         this.isSpectating = true;
         this.mainCell = null;
@@ -79,7 +75,6 @@ export class Application {
         this.applySpectateLabelAlpha();
     }
 
-    /** Новая жизнь — можно снова владеть клетками. */
     prepareNewLife() {
         this.snakeEnded = false;
         this.headCellId = null;
@@ -87,10 +82,6 @@ export class Application {
         this.mainCell = null;
     }
 
-    /**
-     * Голова умерла / змейка снята — больше не считаем сегменты своими.
-     * Хвост на экране может ещё дорисоваться, но управление и «жизнь» уже конец.
-     */
     endOwnedSnake() {
         if (this.snakeEnded && this.ownedCells.length === 0) {
             return false;
@@ -102,7 +93,6 @@ export class Application {
         return true;
     }
 
-    /** Обновить id головы = минимальный среди owned. */
     refreshHeadCellId() {
         this.headCellId = getMainSegmentId(this.ownedCells);
     }
@@ -120,9 +110,8 @@ export class Application {
     }
 
     viewRange() {
-        // CSS-пиксели, не буфер с devicePixelRatio — иначе на телефоне зум «улетает»
-        const w = this.view?.clientWidth || this.renderer?.screen?.width || innerWidth;
-        const h = this.view?.clientHeight || this.renderer?.screen?.height || innerHeight;
+        const w = this._viewCssW || this.view?.clientWidth || innerWidth;
+        const h = this._viewCssH || this.view?.clientHeight || innerHeight;
         const ratio = Math.max(h / 1080, w / 1920);
         return ratio * this.zoom;
     }
@@ -148,7 +137,6 @@ export class Application {
         }
     }
 
-    /** Главный сегмент = клетка с минимальным node id (id1). Камера следует за ней. */
     pickMainCell() {
         this.pruneOwnedCells();
         this.ownedCells = sortSegmentIds(this.ownedCells);
@@ -159,10 +147,6 @@ export class Application {
         }
     }
 
-    /**
-     * z-index по порядку id в цепочке каждого игрока (не по массе).
-     * id1 — поверх, id2 ниже, id3 ниже id2…
-     */
     applySegmentLayers() {
         const byPlayer = new Map();
 
@@ -186,20 +170,17 @@ export class Application {
             }
         }
 
-        // Еда / мёртвая еда — всегда под змейками (змейки от ~10000)
         for (let i = 0, len = this.cells.length; i < len; i++) {
             const cell = this.cells[i];
             if (!cell || cell.destroyed || cell.playerId) continue;
             const z = cell.isDeathFood ? 3 : (cell.isFood ? 2 : 1);
             if (cell._segmentZ !== z) {
                 cell._segmentZ = z;
-                cell.sprite.zIndex = z;
                 cell._lastZIndex = z;
             }
         }
     }
 
-    /** Всегда интерполируем свои клетки — иначе камера замирает вне экрана. */
     updateOwnedCells(now) {
         for (let i = 0; i < this.ownedCells.length; i++) {
             const cell = this.cellsByID.get(this.ownedCells[i]);
@@ -209,7 +190,6 @@ export class Application {
         }
     }
 
-    /** Позиция для камеры: главный сегмент (мин. id). update() уже вызван в updateOwnedCells. */
     getCameraTargetPos() {
         this.pickMainCell();
         const main = this.mainCell;
@@ -235,363 +215,118 @@ export class Application {
         return { x: this.posX, y: this.posY };
     }
 
-
+    /** Кэш размеров карты после пакета границ (рисуем в drawWorld). */
     drawBorder() {
-        if (this.borderGraphics) {
-            this.borderGraphics.destroy({ children: true });
-            this.borderGraphics = null;
-        }
-        if (this.borderOutsideGfx) {
-            this.borderOutsideGfx.destroy();
-            this.borderOutsideGfx = null;
-        }
-
-        const border = this.core.net.border;
-        if (!border?.width) return;
-
-        const radius = Math.min(border.width, border.height) / 2;
-        const cx = border.centerX ?? 0;
-        const cy = border.centerY ?? 0;
-        const GOLD = 0xf0c84a;
-        const OUTSIDE = 0xffe8a8;
-        const extent = Math.max(radius * 6, border.width * 3, 30000);
-
-        // За границей карты — кремовый фон ВЫШЕ еды (2–3), ниже змей (~10000),
-        // чтобы еда за кругом не мерцала
-        const outside = new PIXI.Graphics();
-        outside.position.set(cx, cy);
-        outside.beginFill(OUTSIDE, 1);
-        outside.drawRect(-extent, -extent, extent * 2, extent * 2);
-        if (typeof outside.beginHole === "function") {
-            outside.beginHole();
-            outside.drawCircle(0, 0, radius);
-            outside.endHole();
-        }
-        outside.endFill();
-        outside.zIndex = 50;
-        this.borderOutsideGfx = outside;
-        this.stage.addChild(outside);
-
-        // Одна золотая обводка — поверх «за картой»
-        const g = new PIXI.Graphics();
-        g.position.set(cx, cy);
-        g.lineStyle(28, GOLD, 1);
-        g.drawCircle(0, 0, radius);
-        g.zIndex = 60;
-        g.visible = this.core.settings.border !== false;
-        outside.visible = g.visible;
-
-        this.borderGraphics = g;
-        this.stage.addChild(g);
+        this.mapReady = !!(this.core.net?.border?.width);
     }
 
     drawBackground() {
-        const border = this.core.net.border;
-        const mapW = border.width;
-        const mapH = border.height;
-
-        const geometry = new PIXI.Geometry()
-            .addAttribute('aVertexPosition', [
-                -mapW / 2, -mapH / 2,
-                mapW / 2, -mapH / 2,
-                -mapW / 2, mapH / 2,
-                mapW / 2, mapH / 2,
-            ])
-            .addAttribute('aUvs', [0, 0, 1, 0, 0, 1, 1, 1])
-            .addIndex([0, 1, 2, 1, 3, 2]);
-
-        const shader = PIXI.Shader.from(`
-precision highp float;
-attribute vec2 aVertexPosition;
-attribute vec2 aUvs;
-uniform mat3 translationMatrix;
-uniform mat3 projectionMatrix;
-varying vec2 vUvs;
-void main() {
-  vUvs = aUvs;
-  gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
-}
-  `, `
-precision highp float;
-varying vec2 vUvs;
-
-uniform vec2 uCenter;
-
-// Максимально плавный градиент
-float smoothGradient(float t) {
-  t = clamp(t, 0.0, 1.0);
-  return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
-}
-
-// Дизеринг против banding
-float noise(vec2 p) {
-  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-}
-
-void main() {
-  vec2 uv = vUvs;
-  float dist = length(uv - uCenter); // 0..~0.707
-
-  // Нормализуем расстояние: 0 = центр, 1 = угол
-  float t = dist / 0.65; 
-
-  // Инвертируем: центр = 1, края = 0
-  float intensity = 0.9 - smoothGradient(t);
-
-  // Светлый «игровой дворик» для детской стилистики
-  vec3 centerColor = vec3(0.72, 0.92, 0.98); // мягкий небо-голубой
-  vec3 edgeColor   = vec3(0.55, 0.82, 0.78); // мятный край
-
-  vec3 color = mix(edgeColor, centerColor, intensity);
-
-  // Дизеринг
-  color += (noise(uv * 1200.0) - 0.5) * 0.018;
-
-  gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
-}
-  `, {
-            uCenter: [0.5, 0.5]
-        });
-
-        const bg = new PIXI.Mesh(geometry, shader);
-        bg.position.set(0, 0);
-        bg.zIndex = -1000;
-        bg.visible = this.core.settings.background;
-        this.stage.addChild(bg);
-        this.backgroundSprite = bg;
-    }
-
-
-
-
-    performHueShifting() {
-        this.hueDegree += 1
-        if (this.hueDegree > 360) this.hueDegree = 0
-        this.colorMatrix.hue(this.hueDegree)
-        this.hueShiftingRAF = requestAnimationFrame(this.performHueShifting.bind(this))
+        this.mapReady = !!(this.core.net?.border?.width);
     }
 
     drawGrid() {
-        if (this.gridSprite) this.gridSprite.destroy()
-
-        const border = this.core.net.border
-        const g = new PIXI.Graphics()
-        const width = 100
-        const height = 100
-        g.lineStyle(10, 0xa8d4e8, 0.55)
-        g.moveTo(width, 0)
-        g.lineTo(0, 0)
-        g.moveTo(width / 2, height / 2)
-        g.lineTo(width / 2, -height / 2)
-        const texture = this.renderer.generateTexture(g, {
-            scaleMode: PIXI.SCALE_MODES.LINEAR,
-            resolution: this.renderDpr || this.renderer.resolution || 1,
-            region: new PIXI.Rectangle(0, 0, width / 2, height / 2)
-        })
-        texture.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR
-        texture.baseTexture.mipmapMode = PIXI.MIPMAP_MODES.ON
-        this.gridSprite = new PIXI.TilingSprite(texture, border.width, border.height)
-        this.gridSprite.position.set(-border.width / 2, -border.height / 2)
-        this.gridSprite.visible = this.core.settings.grid
-
-        this.stage.addChild(this.gridSprite)
+        this.mapReady = !!(this.core.net?.border?.width);
     }
 
     drawSectors() {
-        if (this.sectorContainer) this.sectorContainer.destroy()
+        this.mapReady = !!(this.core.net?.border?.width);
+    }
 
-        const labels = []
-        const rows = 5
-        const cols = 5
-        const sectorSize = this.core.net.border.width / 5
-        this.sectorContainer = new PIXI.Container()
-        for (let row = 0; row < rows; row++) {
-            labels[row] = []
-            for (let col = 0; col < cols; col++) {
-                const square = new PIXI.Graphics()
-                square.lineStyle(80, 0x7eb8d0, 0.35)
-                square.drawRect(0, 0, sectorSize, sectorSize);
-                square.position.set(col * sectorSize, row * sectorSize)
-                const cyrRows = ["А", "Б", "В", "Г", "Д"];
-                const label = new PIXI.Text(cyrRows[row] + (col + 1), {
-                    fontFamily: 'Nunito, Ubuntu, Arial, sans-serif',
-                    fontWeight: '700',
-                    fontSize: 1024,
-                    fill: 0x6a9fb0
-                })
-                label.position.set(
-                    col * sectorSize + (sectorSize - label.width) / 2,
-                    row * sectorSize + (sectorSize - label.height) / 2
-                )
-                const sector = new PIXI.Container()
-                sector.addChild(square, label)
-                this.sectorContainer.addChild(sector)
-            }
-        }
-        this.sectorContainer.position.set(-1 * sectorSize * 5 / 2, -1 * sectorSize * 5 / 2)
-        this.sectorContainer.visible = this.core.settings.sectors
-
-        this.stage.addChild(this.sectorContainer)
+    drawMinimapBorder() {
+        this._minimapNeedsBorder = true;
     }
 
     initMinimap() {
         const view = this.minimapView = document.getElementById("minimap-view");
-        this.minimapRenderer = PIXI.autoDetectRenderer({
-            view,
-            width: MINIMAP_SIZE,
-            height: MINIMAP_SIZE,
-            backgroundAlpha: 0,
-            antialias: false
-        });
-
-        this.minimapStage = new PIXI.Container();
-
-        this.minimapBorderGfx = new PIXI.Graphics();
-        this.minimapStage.addChild(this.minimapBorderGfx);
-
-        // Серые точки — другие игроки и боты
-        this.minimapPlayersGfx = new PIXI.Graphics();
-        this.minimapStage.addChild(this.minimapPlayersGfx);
-
-        // Свой маркер поверх
-        const sprite = this.minimapEntity = new PIXI.Sprite(PIXI.Texture.WHITE);
-        sprite.width = 8;
-        sprite.height = 8;
-        sprite.tint = 0xff4444;
-        sprite.anchor.set(0.5);
-        this.minimapStage.addChild(sprite);
+        if (!view) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        view.width = Math.floor(MINIMAP_SIZE * dpr);
+        view.height = Math.floor(MINIMAP_SIZE * dpr);
+        view.style.width = MINIMAP_SIZE + "px";
+        view.style.height = MINIMAP_SIZE + "px";
+        this.minimapCtx = view.getContext("2d");
+        this.minimapDpr = dpr;
+        this._minimapNeedsBorder = true;
     }
 
-    drawMinimapBorder() {
-        if (!this.minimapBorderGfx) return;
+    renderMinimap() {
+        const ctx = this.minimapCtx;
         const border = this.core?.net?.border;
-        if (!border?.width) return;
+        if (!ctx || !border?.width) return;
 
-        const GOLD = 0xf0c84a;
-        const OUTSIDE = 0xffe8a8;
-        this.minimapBorderGfx.clear();
+        const dpr = this.minimapDpr || 1;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
 
-        // Фон миникарты — цвет «за границей»
-        this.minimapBorderGfx.beginFill(OUTSIDE, 1);
-        this.minimapBorderGfx.drawRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
-        this.minimapBorderGfx.endFill();
+        ctx.fillStyle = OUTSIDE_CSS;
+        ctx.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
 
-        if (border.centerX != null && border.width) {
+        if (border.centerX != null) {
             const r = border.width / 2;
             const cx = ((border.centerX - border.left) / border.width) * MINIMAP_SIZE;
             const cy = ((border.centerY - border.top) / border.height) * MINIMAP_SIZE;
-            const scale = MINIMAP_SIZE / border.width;
-            const rr = r * scale;
+            const rr = r * (MINIMAP_SIZE / border.width);
 
-            // Внутри круга — чуть прозрачнее, чтобы сетка читалась
-            this.minimapBorderGfx.beginFill(0xffffff, 0.25);
-            this.minimapBorderGfx.drawCircle(cx, cy, rr);
-            this.minimapBorderGfx.endFill();
-
-            this.minimapBorderGfx.lineStyle(2, GOLD, 1);
-            this.minimapBorderGfx.drawCircle(cx, cy, rr);
+            ctx.beginPath();
+            ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255,255,255,0.25)";
+            ctx.fill();
+            ctx.strokeStyle = GOLD_CSS;
+            ctx.lineWidth = 2;
+            ctx.stroke();
         }
-    }
-
-    updateMinimap() {
-        if (!this.minimapEntity) return;
-        const border = this.core?.net?.border;
-        if (!border?.width) return;
-
-        const { x, y } = worldToMinimap(this.posX, this.posY, border);
-        this.minimapEntity.position.set(x, y);
-
-        const gfx = this.minimapPlayersGfx;
-        if (!gfx) return;
-        gfx.clear();
 
         const ownerId = this.core?.net?.ownerPlayerId >>> 0;
         const serverDots = this.core?.net?.minimapPlayers || [];
-
-        gfx.beginFill(0x8a8a8a, 0.95);
+        ctx.fillStyle = "rgba(138,138,138,0.95)";
         for (let i = 0; i < serverDots.length; i++) {
             const d = serverDots[i];
             if (!d) continue;
-            if (ownerId && (d.pID >>> 0) === ownerId) continue; // себя — красный маркер
+            if (ownerId && (d.pID >>> 0) === ownerId) continue;
             const p = worldToMinimap(d.x, d.y, border);
-            gfx.drawCircle(p.x, p.y, 3);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fill();
         }
-        gfx.endFill();
+
+        const self = worldToMinimap(this.posX, this.posY, border);
+        ctx.fillStyle = "#ff4444";
+        ctx.fillRect(self.x - 4, self.y - 4, 8, 8);
     }
 
-    /** DPR: на Mac Retina полный 2–3× + MSAA убивает FPS; на мобилках оставляем выше. */
+    updateMinimap() {
+        this.renderMinimap();
+    }
+
     static computeRenderDpr() {
         const raw = Math.max(window.devicePixelRatio || 1, 1);
         const ua = navigator.userAgent || "";
         const isMobile = /iPhone|iPad|iPod|Android/i.test(ua)
             || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua));
-        // Desktop (в т.ч. MacBook): кап 1.5 — заметно легче, почти без мыла
         const cap = isMobile ? 3 : 1.5;
         return Math.min(raw, cap);
     }
 
-    initRenderer() {
-        const view = this.view = document.getElementById("view")
-        const w = Math.max(1, Math.floor(window.visualViewport?.width || innerWidth));
-        const h = Math.max(1, Math.floor(window.visualViewport?.height || innerHeight));
+    resizeCanvas(cssW, cssH) {
         const dpr = Application.computeRenderDpr();
         this.renderDpr = dpr;
-        this._viewCssW = w;
-        this._viewCssH = h;
-
-        if (PIXI.settings) {
-            PIXI.settings.ROUND_PIXELS = false;
-            PIXI.settings.RESOLUTION = dpr;
-            if (PIXI.settings.SCALE_MODE != null) {
-                PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.LINEAR;
-            }
-        }
-
-        // antialias:false — круги из текстуры; MSAA на Retina Mac очень дорогой
-        this.renderer = PIXI.autoDetectRenderer({
-            view,
-            width: w,
-            height: h,
-            antialias: false,
-            resolution: dpr,
-            autoDensity: true,
-            powerPreference: 'high-performance',
-            backgroundColor: 0xffe8a8,
-            backgroundAlpha: 1,
-            hello: false
-        })
-        this.stage = new PIXI.Container()
-        this.stage.sortableChildren = true
-        this.stage.position.set(w / 2, h / 2);
-
-        const circle = new PIXI.Graphics()
-        circle.beginFill(0xffffff)
-        circle.drawCircle(256, 256, 256)
-        circle.endFill();
-
-        const star = new PIXI.Graphics()
-            .beginFill(0xffffff)
-            .lineStyle(10, 0x777777, 1)
-            .drawPolygon(new Star(256, 256, 30, 256, 220, 0))
-            .endFill();
-
-        // Текстура клетки в DPR — чёткие круги на Retina
-        const cellRenderTexture = PIXI.RenderTexture.create({
-            width: 512,
-            height: 512,
-            resolution: dpr,
-            scaleMode: PIXI.SCALE_MODES.LINEAR
-        })
-        this.renderer.render(circle, { renderTexture: cellRenderTexture })
-        cellRenderTexture.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR
-        cellRenderTexture.baseTexture.mipmapMode = PIXI.MIPMAP_MODES.ON
-
-
-        this.textures = { cell: cellRenderTexture }
-
-        Cell.SPRITE = new PIXI.Sprite(cellRenderTexture)
+        this._viewCssW = cssW;
+        this._viewCssH = cssH;
+        const bw = Math.max(1, Math.floor(cssW * dpr));
+        const bh = Math.max(1, Math.floor(cssH * dpr));
+        if (this.view.width !== bw) this.view.width = bw;
+        if (this.view.height !== bh) this.view.height = bh;
+        this.view.style.width = cssW + "px";
+        this.view.style.height = cssH + "px";
     }
 
+    initRenderer() {
+        const view = this.view = document.getElementById("view");
+        const w = Math.max(1, Math.floor(window.visualViewport?.width || innerWidth));
+        const h = Math.max(1, Math.floor(window.visualViewport?.height || innerHeight));
+        this.ctx = view.getContext("2d", { alpha: false });
+        this.resizeCanvas(w, h);
+    }
 
     _syncOwnedSet() {
         const key = this.ownedCells.length
@@ -604,6 +339,157 @@ void main() {
             this._ownedSet.add(this.ownedCells[i]);
         }
         return this._ownedSet;
+    }
+
+    _applyCameraTransform(ctx) {
+        const dpr = this.renderDpr || 1;
+        const cssW = this._viewCssW || innerWidth;
+        const cssH = this._viewCssH || innerHeight;
+        const s = this.camera.s;
+        ctx.setTransform(
+            s * dpr, 0,
+            0, s * dpr,
+            (cssW / 2) * dpr,
+            (cssH / 2) * dpr
+        );
+        ctx.translate(-this.camera.x, -this.camera.y);
+    }
+
+    _paintBackground(ctx, border) {
+        const mapW = border.width;
+        const mapH = border.height;
+        const cx = border.centerX ?? 0;
+        const cy = border.centerY ?? 0;
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(mapW, mapH) * 0.55);
+        grad.addColorStop(0, "rgb(184,235,250)");
+        grad.addColorStop(1, "rgb(140,209,199)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(-mapW / 2, -mapH / 2, mapW, mapH);
+    }
+
+    _paintGrid(ctx, border) {
+        const left = -border.width / 2;
+        const top = -border.height / 2;
+        const step = 50;
+        ctx.strokeStyle = GRID_CSS;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        for (let x = left; x <= left + border.width; x += step) {
+            ctx.moveTo(x, top);
+            ctx.lineTo(x, top + border.height);
+        }
+        for (let y = top; y <= top + border.height; y += step) {
+            ctx.moveTo(left, y);
+            ctx.lineTo(left + border.width, y);
+        }
+        ctx.stroke();
+    }
+
+    _paintSectors(ctx, border) {
+        const sectorSize = border.width / 5;
+        const originX = -sectorSize * 5 / 2;
+        const originY = -sectorSize * 5 / 2;
+        ctx.strokeStyle = SECTOR_LINE;
+        ctx.lineWidth = 40;
+        ctx.fillStyle = SECTOR_LABEL;
+        ctx.font = "700 720px Nunito, Ubuntu, Arial, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 5; col++) {
+                const x = originX + col * sectorSize;
+                const y = originY + row * sectorSize;
+                ctx.strokeRect(x, y, sectorSize, sectorSize);
+                ctx.fillText(
+                    CYR_ROWS[row] + (col + 1),
+                    x + sectorSize / 2,
+                    y + sectorSize / 2
+                );
+            }
+        }
+    }
+
+    _paintOutsideAndBorder(ctx, border) {
+        const radius = Math.min(border.width, border.height) / 2;
+        const cx = border.centerX ?? 0;
+        const cy = border.centerY ?? 0;
+        const extent = Math.max(radius * 6, border.width * 3, 30000);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(cx - extent, cy - extent, extent * 2, extent * 2);
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2, true);
+        ctx.fillStyle = OUTSIDE_CSS;
+        ctx.fill("evenodd");
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = GOLD_CSS;
+        ctx.lineWidth = 28;
+        ctx.stroke();
+    }
+
+    drawWorld() {
+        const ctx = this.ctx;
+        if (!ctx) return;
+
+        const dpr = this.renderDpr || 1;
+        const cssW = this._viewCssW || innerWidth;
+        const cssH = this._viewCssH || innerHeight;
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = OUTSIDE_CSS;
+        ctx.fillRect(0, 0, cssW * dpr, cssH * dpr);
+
+        this._applyCameraTransform(ctx);
+
+        const border = this.core.net?.border;
+        const settings = this.core.settings;
+        if (border?.width && this.mapReady) {
+            if (settings?.background) {
+                this._paintBackground(ctx, border);
+            }
+            if (settings?.rawSettings?.grid) {
+                this._paintGrid(ctx, border);
+            }
+            if (settings?.sectors) {
+                this._paintSectors(ctx, border);
+            }
+        }
+
+        const foodList = this._drawList;
+        foodList.length = 0;
+        const snakeList = this._drawListSnakes || (this._drawListSnakes = []);
+        snakeList.length = 0;
+
+        for (let i = 0, len = this.cells.length; i < len; i++) {
+            const cell = this.cells[i];
+            if (!cell || cell.destroyed || !cell._visible) continue;
+            if (cell.playerId) snakeList.push(cell);
+            else foodList.push(cell);
+        }
+        for (let i = 0; i < this.dyingCells.length; i++) {
+            const cell = this.dyingCells[i];
+            if (!cell || !cell._fadingOut) continue;
+            if (cell.playerId) snakeList.push(cell);
+            else foodList.push(cell);
+        }
+
+        foodList.sort((a, b) => (a._segmentZ || 0) - (b._segmentZ || 0));
+        snakeList.sort((a, b) => (a._segmentZ || 0) - (b._segmentZ || 0));
+
+        for (let i = 0; i < foodList.length; i++) {
+            foodList[i].draw(ctx);
+        }
+
+        if (border?.width && this.mapReady && settings?.border !== false) {
+            this._paintOutsideAndBorder(ctx, border);
+        }
+
+        for (let i = 0; i < snakeList.length; i++) {
+            snakeList[i].draw(ctx);
+        }
     }
 
     loop(now = performance.now()) {
@@ -620,7 +506,6 @@ void main() {
         const viewBottom = cam.y + viewHeight / 2;
 
         const ownedSet = this._syncOwnedSet();
-        // Слои сегментов — в Network после пакета; раз в ~6 кадров подстраховка
         if ((++this._layersFrame % 6) === 0) {
             this.applySegmentLayers();
         }
@@ -629,11 +514,8 @@ void main() {
         for (let i = 0, len = this.cells.length; i < len; i++) {
             const cell = this.cells[i];
             if (!cell || cell.destroyed) continue;
-
             if (ownedSet.has(cell.id)) continue;
 
-            // Cull по серверным nx/ny — иначе клетка «застывает» вне экрана
-            // и больше не появляется (дыры в середине чужих змей).
             const cx = Number.isFinite(cell.nx) ? cell.nx : cell.x;
             const cy = Number.isFinite(cell.ny) ? cell.ny : cell.y;
             const cr = (Number.isFinite(cell.nr) ? cell.nr : cell.r) || 0;
@@ -641,27 +523,20 @@ void main() {
             const isVisible = !(cx + cr < viewLeft - margin || cx - cr > viewRight + margin ||
                 cy + cr < viewTop - margin || cy - cr > viewBottom + margin);
 
-            // Сегменты змей всегда интерполируем (даже чуть вне экрана)
             const isSnake = !!cell.playerId;
             if (isVisible || isSnake) {
                 cell.update(this.now);
             }
-
-            if (isVisible !== cell._visible) {
-                cell._visible = isVisible;
-                if (cell.sprite) cell.sprite.visible = isVisible;
-            }
+            cell._visible = isVisible;
         }
 
         for (let i = 0; i < this.ownedCells.length; i++) {
             const cell = this.cellsByID.get(this.ownedCells[i]);
             if (cell && !cell.destroyed) {
                 cell._visible = true;
-                cell.sprite.visible = true;
             }
         }
 
-        // Плавное исчезновение удалённых клеток
         if (this.dyingCells.length) {
             for (let i = this.dyingCells.length - 1; i >= 0; i--) {
                 const cell = this.dyingCells[i];
@@ -672,12 +547,10 @@ void main() {
         }
 
         this.updateCamera();
+        this.drawWorld();
 
-        this.renderer.render(this.stage);
-        // Миникарта: каждый 2-й кадр — меньше лишних draw call на Mac
         if ((++this._minimapFrame & 1) === 0) {
             this.updateMinimap();
-            this.minimapRenderer.render(this.minimapStage);
         }
 
         this._fpsFrames++;
@@ -691,27 +564,20 @@ void main() {
         requestAnimationFrame(this.loop);
     }
 
-
     clear() {
         this.exitSpectateMode();
         for (let i = 0; i < (this.dyingCells?.length || 0); i++) {
             this.dyingCells[i]?._finishDestroy?.();
         }
         this.dyingCells = [];
-        this.stage.removeChildren()
-        this.cells = []
-        this.cellsByID = new Map()
-        this.ownedCells = []
-        this.mainCell = null
-        this.headCellId = null
-        this.snakeEnded = false
-        this.borderGraphics = null
-        this.borderOutsideGfx = null
-        this.backgroundSprite = null
-        this.gridSprite = null
-        this.sectorContainer = null
+        this.cells = [];
+        this.cellsByID = new Map();
+        this.ownedCells = [];
+        this.mainCell = null;
+        this.headCellId = null;
+        this.snakeEnded = false;
+        this.mapReady = false;
     }
-
 
     updateCamera() {
         const ownedCount = this.ownedCells.length;
@@ -747,24 +613,5 @@ void main() {
 
         this.camera.s = this.viewZoom;
         this.camera.mass = mass;
-        // camera.score — очки за еду с сервера, не трогаем здесь
-
-        if (this._lastPivotX !== this.camera.x || this._lastPivotY !== this.camera.y) {
-            this.stage.pivot.set(this.camera.x, this.camera.y);
-            this._lastPivotX = this.camera.x;
-            this._lastPivotY = this.camera.y;
-        }
-
-        if (this._lastScale !== this.camera.s) {
-            this.stage.scale.set(this.camera.s);
-            this._lastScale = this.camera.s;
-        }
-
-        const cssW = this._viewCssW || this.view.clientWidth || innerWidth;
-        const cssH = this._viewCssH || this.view.clientHeight || innerHeight;
-        this.stage.position.set(cssW / 2, cssH / 2);
     }
-
-
-
 }

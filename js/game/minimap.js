@@ -1,4 +1,4 @@
-/** Размер Pixi-канваса миникарты (совпадает с #minimap-grid в CSS). */
+/** Размер канваса миникарты (совпадает с #minimap-grid в CSS). */
 export const MINIMAP_SIZE = 200;
 
 /**

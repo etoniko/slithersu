@@ -38,11 +38,7 @@ export function applyServerCellState(cell, posX, posY, size, now, instant = fals
     }
 
     cell.updated = now;
-    cell.sprite.x = cell.x;
-    cell.sprite.y = cell.y;
-    const s = cell.r / 256;
-    cell.sprite.scale.set(s);
-    cell._lastScale = s;
+    cell._lastScale = cell.r / 256;
     return true;
 }
 

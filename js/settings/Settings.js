@@ -39,19 +39,14 @@ export class Settings {
     }
 
     set background(value) {
-        if (this.core.app.backgroundSprite) {
-            this.core.app.backgroundSprite.visible = value;
-        }
         this.rawSettings.background = value;
     }
-
 
     get sectors() {
         return this.rawSettings.sectors
     }
 
     set sectors(value) {
-        this.core.app.sectorContainer.visible = value
         this.rawSettings.sectors = value
     }
 
@@ -61,11 +56,5 @@ export class Settings {
 
     set border(value) {
         this.rawSettings.border = value
-        if (this.core.app.borderGraphics) {
-            this.core.app.borderGraphics.visible = value
-        }
-        if (this.core.app.borderOutsideGfx) {
-            this.core.app.borderOutsideGfx.visible = value
-        }
     }
 }

@@ -1313,21 +1313,8 @@ export class UserInterface {
         const w = Math.max(1, Math.floor(vv?.width ?? innerWidth));
         const h = Math.max(1, Math.floor(vv?.height ?? innerHeight));
         const app = this.core.app;
-        if (!app?.renderer) return;
-        const dprFn = app.constructor?.computeRenderDpr;
-        const dpr = typeof dprFn === "function"
-            ? dprFn()
-            : Math.min(Math.max(window.devicePixelRatio || 1, 1), 1.5);
-        app.renderDpr = dpr;
-        app._viewCssW = w;
-        app._viewCssH = h;
-        if (app.renderer.resolution !== dpr) {
-            app.renderer.resolution = dpr;
-        }
-        app.renderer.resize(w, h);
-        if (app.stage) {
-            app.stage.position.set(w / 2, h / 2);
-        }
+        if (!app?.view || !app.resizeCanvas) return;
+        app.resizeCanvas(w, h);
         // Сброс «улетевшего» зума после поворота/обновления на мобилке
         if (app.ownedCells.length === 0 && !app.isSpectating) {
             const z = app.zoom;

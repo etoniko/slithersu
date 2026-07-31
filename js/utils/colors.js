@@ -1,7 +1,7 @@
 export const BLACK_UNLOCK_ADS = 1000;
 
 /**
- * Цвет с сервера (`#RRGGBB` / `0xRRGGBB` / число) → uint для PIXI tint / lineStyle.
+ * Цвет с сервера (`#RRGGBB` / `0xRRGGBB` / число) → uint 0xRRGGBB.
  */
 export function toPixiColor(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -26,4 +26,14 @@ export function toPixiColor(value) {
   const asNum = Number(s);
   if (Number.isFinite(asNum)) return (asNum >>> 0) & 0xffffff;
   return 0xffffff;
+}
+
+/** uint 0xRRGGBB → CSS rgb/rgba. */
+export function colorToCss(value, alpha = 1) {
+  const n = (typeof value === "number" ? value : toPixiColor(value)) >>> 0;
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  if (alpha >= 1) return `rgb(${r},${g},${b})`;
+  return `rgba(${r},${g},${b},${alpha})`;
 }

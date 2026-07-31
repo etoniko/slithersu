@@ -369,13 +369,7 @@ export class Network {
         let cellsByID = this.core.app.cellsByID
         let cells = this.core.app.cells
 
-        let sprite = new PIXI.Sprite(this.core.app.textures.cell)
-        sprite.anchor.set(.5)
-        sprite.roundPixels = false;
-
-        this.core.app.stage.addChild(sprite)
-
-        const cell = new Cell(this.core, id, x, y, r, sprite, name, color);
+        const cell = new Cell(this.core, id, x, y, r, null, name, color);
         if (playerId) cell.setPlayerId(playerId);
         if (cellType === 1) cell.setAsFood();
         else if (cellType === 3) cell.setAsDeathFood();
