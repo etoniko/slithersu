@@ -449,7 +449,7 @@ export class Network {
         this.send(msg.buffer);
     }
 
-    sendMouseMove() {
+    sendMouseMove(force = false) {
         if (!this.ws || this.ws.readyState !== 1) return;
         if (this.core.app.isSpectating) return;
 
@@ -457,8 +457,11 @@ export class Network {
         const { dx, dy } = getMouseDelta(this.core);
 
         if (
-            dx * dx + dy * dy < 64 ||
-            (Math.abs(this.oldMouseDx - dx) < 0.01 && Math.abs(this.oldMouseDy - dy) < 0.01)
+            !force &&
+            (
+                dx * dx + dy * dy < 64 ||
+                (Math.abs(this.oldMouseDx - dx) < 0.01 && Math.abs(this.oldMouseDy - dy) < 0.01)
+            )
         ) {
             return;
         }

@@ -8,7 +8,8 @@ import {
     initYandex,
     getIdentity,
     getDeviceType,
-    applyDebugPlatformOverride
+    applyDebugPlatformOverride,
+    signalGameReady
 } from "../yandex/YandexSDK.js";
 
 export class Game {
@@ -31,11 +32,18 @@ export class Game {
     this.defaultServerUrl = SERVER_WS_URL;
     console.log("Ready — connect on Play:", SERVER_WS_URL);
 
+    // Пока SDK грузится — игра не считается готовой (LoadingAPI)
+    this.ui?.setGameBooting?.(true);
+
     await initYandex();
     applyDebugPlatformOverride();
     this.deviceType = getDeviceType();
     this.yandex = getIdentity();
     this.ui?.onYandexReady?.(this.yandex);
     this.ui?.onPlatformReady?.(this.deviceType);
+    this.ui?.setGameBooting?.(false);
+
+    // Меню уже интерактивно → сигнал готовности платформе
+    signalGameReady();
   }
 }

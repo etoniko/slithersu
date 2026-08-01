@@ -133,8 +133,29 @@ export class UserInterface {
             // Фокус на «Играть»
             this.playButton?.focus?.();
             this.updateControlsHint();
+            // Лимит DPR на ТВ — меньше лагов
+            if (this.core.app) this.core.app.tvPerfMode = true;
         }
         this.mobileControls?.syncVisibility();
+    }
+
+    /** Пока SDK грузится — блокируем старт (LoadingAPI ещё не ready). */
+    setGameBooting(booting) {
+        this._booting = !!booting;
+        const ids = ["play", "spectate", "settings", "death-play", "death-spectate", "death-revive"];
+        for (const id of ids) {
+            const el = document.getElementById(id);
+            if (!el) continue;
+            if (booting) {
+                el.dataset.wasDisabled = el.disabled ? "1" : "0";
+                el.disabled = true;
+            } else if (el.dataset.wasDisabled === "1") {
+                el.disabled = true;
+            } else {
+                el.disabled = false;
+            }
+        }
+        this.updateReviveButton();
     }
 
     updateControlsHint() {
@@ -646,6 +667,15 @@ export class UserInterface {
         this.updateReviveButton();
         this.mobileControls?.syncVisibility();
         this.updateMenuButtons();
+        this.updateControlsHint();
+        // ТВ: сразу фокус на «Играть снова», чтобы можно было продолжить без перезапуска
+        requestAnimationFrame(() => {
+            if (isTV()) {
+                const play = document.getElementById("death-play");
+                play?.focus?.();
+                this.tvControls._focusIdx = 1;
+            }
+        });
     }
 
     hideDeathStats() {
@@ -674,6 +704,8 @@ export class UserInterface {
     updateReviveButton() {
         const btn = document.getElementById("death-revive");
         const hint = document.getElementById("death-revive-hint");
+        const main = btn?.querySelector(".death-revive-main");
+        const adLabel = btn?.querySelector(".death-revive-ad-label");
         if (!btn) return;
         const snap = this._lastDeathSnap;
         const score = snap?.score | 0;
@@ -681,18 +713,21 @@ export class UserInterface {
         const wait = this._adProgress?.reviveWaitMs | 0;
         const can = score >= 10 || mass >= 20;
 
+        if (adLabel) adLabel.textContent = "Смотреть рекламу";
+
         if (!can) {
             btn.disabled = true;
-            btn.textContent = "Восстановить 30%";
+            if (main) main.textContent = "Восстановить 30%";
+            else btn.textContent = "Восстановить 30%";
             if (hint) hint.textContent = "Слишком мало очков для восстановления";
             return;
         }
         if (wait > 0) {
             const sec = Math.ceil(wait / 1000);
             btn.disabled = true;
-            btn.textContent = `Подождите ${sec} с`;
+            if (main) main.textContent = `Подождите ${sec} с`;
+            else btn.textContent = `Подождите ${sec} с`;
             if (hint) hint.textContent = "Частые смерти — реклама восстановления реже";
-            // тик обновления
             clearTimeout(this._reviveTick);
             this._reviveTick = setTimeout(() => {
                 if (this._adProgress) {
@@ -705,8 +740,10 @@ export class UserInterface {
         btn.disabled = false;
         const keepS = Math.max(1, Math.floor(score * 0.3));
         const keepM = Math.max(1, Math.floor(mass * 0.3));
-        btn.textContent = `Восстановить 30% (${keepS} очков)`;
-        if (hint) hint.textContent = `За рекламу: ~${keepS} очков и ~${keepM} массы`;
+        const scoreWord = keepS === 1 ? "очко" : keepS < 5 ? "очка" : "очков";
+        if (main) main.textContent = `Восстановить 30% (~${keepS} ${scoreWord})`;
+        else btn.textContent = `Смотреть рекламу — восстановить 30%`;
+        if (hint) hint.textContent = `Награда за рекламу: ~${keepS} ${scoreWord} и ~${keepM} массы`;
     }
 
     async onReviveFromAd() {
@@ -965,12 +1002,14 @@ export class UserInterface {
     }
 
     ratingsBaseUrl() {
-        let host = "ffa.agar.su:6009";
-        const wsUrl = this.core.net?.ws?.url || this.core.defaultServerUrl;
-        if (wsUrl) {
-            try { host = new URL(wsUrl.replace(/^ws/i, "http")).host; } catch (_) {}
+        const wsUrl = this.core.net?.ws?.url || this.core.defaultServerUrl || "wss://sixz.ru/slither";
+        try {
+            const u = new URL(String(wsUrl).replace(/^ws/i, "http"));
+            const basePath = (u.pathname || "").replace(/\/+$/, "");
+            return `${u.protocol}//${u.host}${basePath}/ratings`;
+        } catch (_) {
+            return "https://sixz.ru/slither/ratings";
         }
-        return `https://${host}/ratings`;
     }
 
     /** Только топ-5 при загрузке страницы. */

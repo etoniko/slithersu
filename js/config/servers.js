@@ -1,5 +1,5 @@
-/** Единственный игровой сервер (WSS). */
-export const SERVER_HOST = "ffa.agar.su:6009";
+/** Единственный игровой сервер (WSS через прокси sixz.ru). */
+export const SERVER_HOST = "sixz.ru/slither";
 export const SERVER_WS_URL = `wss://${SERVER_HOST}`;
 
 export const servers = {

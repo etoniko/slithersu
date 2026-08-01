@@ -318,6 +318,9 @@ export class Application {
     static computeRenderDpr() {
         const raw = Math.max(window.devicePixelRatio || 1, 1);
         const ua = navigator.userAgent || "";
+        const isTv = document.body.classList.contains("platform-tv")
+            || /SmartTV|TV Safari|Web0S|Tizen|VIDAA|CrKey|AppleTV/i.test(ua);
+        if (isTv) return 1;
         const isMobile = /iPhone|iPad|iPod|Android/i.test(ua)
             || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua));
         const cap = isMobile ? 3 : 1.5;
@@ -467,10 +470,10 @@ export class Application {
             if (settings?.background) {
                 this._paintBackground(ctx, border);
             }
-            if (settings?.rawSettings?.grid) {
+            if (settings?.rawSettings?.grid && !this.tvPerfMode) {
                 this._paintGrid(ctx, border);
             }
-            if (settings?.sectors) {
+            if (settings?.sectors && !this.tvPerfMode) {
                 this._paintSectors(ctx, border);
             }
         }

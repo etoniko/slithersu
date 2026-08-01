@@ -5,6 +5,9 @@
 // `-` в конце класса, чтобы не было диапазона
 const ALLOWED = /[^a-zA-Zа-яА-ЯёЁ0-9 =_<>!.\-]/g;
 
+/** Политические личности — блокируем для модерации Яндекс Игр (п. 3.4.4). */
+const BLOCKED_NICK = /(путин|зеленск|трамп|байден|навал|сталин|ленин|гитлер|hitler|putin|trump|biden|медведев|шойгу|lavrov|лавров)/i;
+
 export function sanitizeSafeText(raw, maxLen = 24) {
   return String(raw || "")
     .replace(ALLOWED, "")
@@ -12,8 +15,9 @@ export function sanitizeSafeText(raw, maxLen = 24) {
 }
 
 export function sanitizeNick(raw) {
-  const n = sanitizeSafeText(raw, 24).trim();
-  return n || "Игрок";
+  let n = sanitizeSafeText(raw, 24).trim();
+  if (!n || BLOCKED_NICK.test(n)) n = "Игрок";
+  return n;
 }
 
 export function sanitizeChatInput(raw) {

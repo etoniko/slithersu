@@ -81,14 +81,29 @@ export function isDesktopDevice() {
     return deviceType === "desktop";
 }
 
+let gameReadySent = false;
+
+/** LoadingAPI.ready — один раз, когда меню уже интерактивно (п. 1.19). */
+export function signalGameReady() {
+    if (gameReadySent) return;
+    gameReadySent = true;
+    try {
+        ysdk?.features?.LoadingAPI?.ready();
+        console.log("[Yandex] LoadingAPI.ready");
+    } catch (e) {
+        console.warn("[Yandex] LoadingAPI.ready:", e);
+    }
+}
+
 export async function initYandex() {
     if (ready) return { ysdk, player, deviceType };
 
-    const hasSdk = await waitForYaGames();
+    const hasSdk = await waitForYaGames(8000);
     if (!hasSdk || typeof YaGames === "undefined") {
         console.log("[Yandex] SDK не найден — локальный режим");
         deviceType = detectLocalDeviceType();
         applyPlatformClass(deviceType);
+        ready = true;
         return { ysdk: null, player: null, deviceType };
     }
 
@@ -96,10 +111,6 @@ export async function initYandex() {
         ysdk = await YaGames.init();
         deviceType = readDeviceType();
         applyPlatformClass(deviceType);
-
-        try {
-            ysdk.features?.LoadingAPI?.ready();
-        } catch (_) {}
 
         try {
             player = await ysdk.getPlayer();
@@ -119,6 +130,7 @@ export async function initYandex() {
         console.warn("[Yandex] init failed:", e);
         deviceType = detectLocalDeviceType();
         applyPlatformClass(deviceType);
+        ready = true;
         return { ysdk: null, player: null, deviceType };
     }
 }
