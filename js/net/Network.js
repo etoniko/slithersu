@@ -131,7 +131,6 @@ export class Network {
         this.adProgress = { ads: 0, blackUnlocked: false, reviveWaitMs: 0 }
         clearInterval(this.pingInterval)
         clearInterval(this.mouseMoveInterval)
-        cancelAnimationFrame(this.core.app.hueShiftingRAF)
     }
 
     send(data) {
@@ -231,7 +230,7 @@ export class Network {
     }
 
     onMessage({ data }) {
-        this.now = Date.now()
+        this.now = performance.now();
 
         let reader;
         let opcode;
@@ -369,7 +368,7 @@ export class Network {
         let cellsByID = this.core.app.cellsByID
         let cells = this.core.app.cells
 
-        const cell = new Cell(this.core, id, x, y, r, null, name, color);
+        const cell = new Cell(this.core, id, x, y, r, name, color);
         if (playerId) cell.setPlayerId(playerId);
         if (cellType === 1) cell.setAsFood();
         else if (cellType === 3) cell.setAsDeathFood();

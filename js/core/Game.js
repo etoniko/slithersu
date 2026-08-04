@@ -4,6 +4,7 @@ import { Storage } from "../settings/Storage.js";
 import { Settings } from "../settings/Settings.js";
 import { Network } from "../net/Network.js";
 import { UserInterface } from "../ui/UserInterface.js";
+import { loadSkinList, listSkinIds } from "../game/skins.js";
 import {
     initYandex,
     getIdentity,
@@ -35,7 +36,12 @@ export class Game {
     // Пока SDK грузится — игра не считается готовой (LoadingAPI)
     this.ui?.setGameBooting?.(true);
 
-    await initYandex();
+    // Скины грузим параллельно с Yandex SDK — лёгкий txt + bake в память
+    await Promise.all([
+      initYandex(),
+      loadSkinList("./skinlist.txt")
+    ]);
+    this.skins = { ids: listSkinIds() };
     applyDebugPlatformOverride();
     this.deviceType = getDeviceType();
     this.yandex = getIdentity();

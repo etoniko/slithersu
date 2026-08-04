@@ -3,7 +3,7 @@ export const BLACK_UNLOCK_ADS = 1000;
 /**
  * Цвет с сервера (`#RRGGBB` / `0xRRGGBB` / число) → uint 0xRRGGBB.
  */
-export function toPixiColor(value) {
+export function toRgbInt(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return (value >>> 0) & 0xffffff;
   }
@@ -30,7 +30,7 @@ export function toPixiColor(value) {
 
 /** uint 0xRRGGBB → CSS rgb/rgba. */
 export function colorToCss(value, alpha = 1) {
-  const n = (typeof value === "number" ? value : toPixiColor(value)) >>> 0;
+  const n = (typeof value === "number" ? value : toRgbInt(value)) >>> 0;
   const r = (n >> 16) & 255;
   const g = (n >> 8) & 255;
   const b = n & 255;

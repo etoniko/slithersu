@@ -1,5 +1,6 @@
 import { MINIMAP_SIZE, worldToMinimap } from "./minimap.js";
 import { getMainSegmentId, sortSegmentIds } from "./segments.js";
+import { clearPlayerSkins } from "./skins.js";
 
 const OUTSIDE_CSS = "#ffe8a8";
 const GOLD_CSS = "#f0c84a";
@@ -118,7 +119,8 @@ export class Application {
 
     calcViewZoom() {
         if (!this.mainCell || this.mainCell.destroyed) return;
-        const size = this.mainCell.r;
+        // nr — серверный размер, без микродрожания от lerp радиуса
+        const size = Number.isFinite(this.mainCell.nr) ? this.mainCell.nr : this.mainCell.r;
         const score = (size * size) / 100;
         const scale = Math.log(score + 2);
         const newViewZoom = Math.pow(1 / scale, 0.2) * this.viewRange();
@@ -513,7 +515,25 @@ export class Application {
     }
 
     loop(now = performance.now()) {
-        this.now = Date.now();
+        // Один clock с сетевым apply — иначе lerp дёргается из‑за рассинхрона Date/performance
+        this.now = now;
+
+        const ownedSet = this._syncOwnedSet();
+        if ((++this._layersFrame % 6) === 0) {
+            this.applySegmentLayers();
+        }
+
+        // Сначала позиции, потом камера от головы — голова всегда в центре экрана
+        this.updateOwnedCells(now);
+
+        for (let i = 0; i < this.ownedCells.length; i++) {
+            const cell = this.cellsByID.get(this.ownedCells[i]);
+            if (cell && !cell.destroyed) {
+                cell._visible = true;
+            }
+        }
+
+        this.updateCamera();
 
         const cam = this.camera;
         const cssW = this._viewCssW || this.view.clientWidth || innerWidth;
@@ -524,12 +544,6 @@ export class Application {
         const viewRight = cam.x + viewWidth / 2;
         const viewTop = cam.y - viewHeight / 2;
         const viewBottom = cam.y + viewHeight / 2;
-
-        const ownedSet = this._syncOwnedSet();
-        if ((++this._layersFrame % 6) === 0) {
-            this.applySegmentLayers();
-        }
-        this.updateOwnedCells(this.now);
 
         for (let i = 0, len = this.cells.length; i < len; i++) {
             const cell = this.cells[i];
@@ -545,28 +559,20 @@ export class Application {
 
             const isSnake = !!cell.playerId;
             if (isVisible || isSnake) {
-                cell.update(this.now);
+                cell.update(now);
             }
             cell._visible = isVisible;
-        }
-
-        for (let i = 0; i < this.ownedCells.length; i++) {
-            const cell = this.cellsByID.get(this.ownedCells[i]);
-            if (cell && !cell.destroyed) {
-                cell._visible = true;
-            }
         }
 
         if (this.dyingCells.length) {
             for (let i = this.dyingCells.length - 1; i >= 0; i--) {
                 const cell = this.dyingCells[i];
-                if (!cell || cell.updateFade(this.now)) {
+                if (!cell || cell.updateFade(now)) {
                     this.dyingCells.splice(i, 1);
                 }
             }
         }
 
-        this.updateCamera();
         this.drawWorld();
 
         if ((++this._minimapFrame & 1) === 0) {
@@ -597,6 +603,7 @@ export class Application {
         this.headCellId = null;
         this.snakeEnded = false;
         this.mapReady = false;
+        clearPlayerSkins();
     }
 
     updateCamera() {
@@ -614,8 +621,9 @@ export class Application {
                 }
             }
             this.calcViewZoom();
-            this.camera.x = (this.camera.x + this.posX) / 2;
-            this.camera.y = (this.camera.y + this.posY) / 2;
+            // Камера жёстко на голове — без follow-lag (он и давал дрожание мира)
+            this.camera.x = this.posX;
+            this.camera.y = this.posY;
             this.posSize = this.viewZoom;
         } else if (this.isSpectating) {
             this.mainCell = null;

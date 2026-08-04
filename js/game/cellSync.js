@@ -1,4 +1,7 @@
-/** Синхронизация позиции клетки с сервером (без поломки интерполяции). */
+/** Синхронизация позиции клетки с сервером. */
+
+/** Длительность lerp: чуть длиннее тика сервера → нет «заморозки» между пакетами. */
+export const CELL_INTERP_MS = 100;
 
 export function isValidCellCoord(n) {
     return typeof n === "number" && Number.isFinite(n);
@@ -29,6 +32,7 @@ export function applyServerCellState(cell, posX, posY, size, now, instant = fals
         cell.y = cell.oy = cell.ny = posY;
         cell.r = cell.or = cell.nr = size;
     } else {
+        // Продолжаем от текущего кадра — без экстраполяции и смены скорости
         cell.ox = cell.x;
         cell.oy = cell.y;
         cell.or = cell.r;

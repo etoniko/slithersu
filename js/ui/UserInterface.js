@@ -20,6 +20,9 @@ import {
 } from "../yandex/YandexSDK.js";
 import { TvControls } from "../input/TvControls.js";
 import { BLACK_UNLOCK_ADS } from "../utils/colors.js";
+import { getSkinCatalog, skinImageUrl, normalizeSkinNick } from "../game/skins.js";
+
+const SKINS_PER_PAGE = 12;
 
 export class UserInterface {
 
@@ -40,11 +43,15 @@ export class UserInterface {
         this.keysPressed = {};
         this.ejectInterval = null;
         this._boostHeld = false;
+        this._boostMouse = false;
 
         this.userInterface = document.getElementById("user-interface")
         this.playButton = document.getElementById("play")
         this.spectateButton = document.getElementById("spectate")
         this.settingsButton = document.getElementById("settings")
+        this.skinsButton = document.getElementById("skins")
+        this._skinsPage = 0
+        this._skinsModalId = 0
         this.nameInput = document.getElementById("name")
         this.scoreElement = document.getElementById("score")
         this.leaderboard = document.getElementById("leaderboard-list") || document.getElementById("leaderboard")
@@ -106,7 +113,7 @@ export class UserInterface {
 
     /** Кнопки меню кликабельны с ТВ-пульта (OK / Enter). */
     makeButtonsFocusable() {
-        const ids = ["play", "spectate", "settings", "death-play", "death-spectate", "death-revive"];
+        const ids = ["play", "spectate", "skins", "settings", "death-play", "death-spectate", "death-revive"];
         for (const id of ids) {
             const el = document.getElementById(id);
             if (!el) continue;
@@ -142,7 +149,7 @@ export class UserInterface {
     /** Пока SDK грузится — блокируем старт (LoadingAPI ещё не ready). */
     setGameBooting(booting) {
         this._booting = !!booting;
-        const ids = ["play", "spectate", "settings", "death-play", "death-spectate", "death-revive"];
+        const ids = ["play", "spectate", "skins", "settings", "death-play", "death-spectate", "death-revive"];
         for (const id of ids) {
             const el = document.getElementById(id);
             if (!el) continue;
@@ -364,6 +371,7 @@ export class UserInterface {
         this.onPlay = this.onPlay.bind(this)
         this.onSpectate = this.onSpectate.bind(this)
         this.onSettings = this.onSettings.bind(this)
+        this.onSkins = this.onSkins.bind(this)
         this.onKeyDown = this.onKeyDown.bind(this)
         this.onNameChange = this.onNameChange.bind(this)
         this.onMouseMove = this.onMouseMove.bind(this)
@@ -372,6 +380,7 @@ export class UserInterface {
         this.onKeyUp = this.onKeyUp.bind(this)
         this.playButton.addEventListener("click", this.onPlay)
         this.spectateButton.addEventListener("click", this.onSpectate)
+        this.skinsButton?.addEventListener("click", this.onSkins)
         this.settingsButton.addEventListener("click", this.onSettings)
         this.deathPlayBtn?.addEventListener("click", () => this.onPlayFromDeath())
         this.deathSpectateBtn?.addEventListener("click", () => this.onSpectateFromDeath())
@@ -439,10 +448,23 @@ export class UserInterface {
         this.core.app.view.addEventListener('wheel', this.onScroll, {
             passive: true
         })
-        this.core.app.view.addEventListener("mousedown", () => {
+        this.core.app.view.addEventListener("mousedown", (e) => {
+            if (e.button !== 0) return;
             if (this.core.app.isSpectating) {
                 this.moveSpectateToClick();
+                return;
             }
+            // ЛКМ = буст (как Space); на мобилке/ТВ — свои контролы
+            if (this.mobileControls?._active || isTV()) return;
+            if (!this.core.app.ownedCells.length) return;
+            e.preventDefault();
+            this._boostMouse = true;
+            this.startBoost();
+        });
+        window.addEventListener("mouseup", (e) => {
+            if (e.button !== 0 || !this._boostMouse) return;
+            this._boostMouse = false;
+            if (!this.keysPressed["Space"]) this.stopBoost();
         });
         // На тач-устройствах не даём странице скроллиться жестами по канвасу
         this.core.app.view.style.touchAction = "none";
@@ -488,6 +510,7 @@ export class UserInterface {
             this.ejectInterval = null;
         }
 
+        this._boostMouse = false;
         this.stopBoost();
     }
 
@@ -873,10 +896,10 @@ export class UserInterface {
 
     onSettings() {
         const labels = {
-            names: "Имена",
-            background: "Фон",
-            sectors: "Секторы",
-            border: "Граница карты"
+            names: "Показывать имена",
+            background: "Красивый фон",
+            sectors: "Клетки на карте",
+            border: "Край карты"
         };
         let contentStr = `<div class="modal-settings-content">`;
         const settings = this.core.settings.rawSettings;
@@ -884,20 +907,157 @@ export class UserInterface {
             if (setting === "mass") continue;
             const inputValue = labels[setting] || setting;
             contentStr += `
-        <div class="modal-settings-tile">
-        ${inputValue}<input type="checkbox" id="setting-${setting}" ${settings[setting] ? "checked" : ""}>
-        </div>
-        `;
+        <label class="modal-settings-tile" for="setting-${setting}">
+          <span>${inputValue}</span>
+          <input type="checkbox" id="setting-${setting}" ${settings[setting] ? "checked" : ""}>
+        </label>`;
         }
         contentStr += `</div>`;
-        this.modalSystem.addModal(200, null, contentStr);
+        this.modalSystem.addModal(360, null, contentStr, { title: "Настройки" });
 
         for (const setting in settings) {
             if (setting === "mass") continue;
-            document.getElementById(`setting-${setting}`).addEventListener("click", () => {
-                this.core.settings[setting] = !this.core.settings[setting];
+            const input = document.getElementById(`setting-${setting}`);
+            input?.addEventListener("change", () => {
+                this.core.settings[setting] = !!input.checked;
             });
         }
+    }
+
+    onSkins() {
+        const catalog = getSkinCatalog();
+        if (!catalog.length) {
+            this.modalSystem.addModal(
+                360,
+                null,
+                `<div class="modal-skins"><p class="modal-skins-hint">Скины ещё загружаются…</p></div>`,
+                { title: "Скины" }
+            );
+            return;
+        }
+        const pages = Math.max(1, Math.ceil(catalog.length / SKINS_PER_PAGE));
+        if (this._skinsPage >= pages) this._skinsPage = 0;
+
+        // Уже открыто — только обновить сетку, не пересоздавать окно
+        if (this._skinsModalId && this.modalSystem.modals.has(this._skinsModalId)) {
+            this._renderSkinsPage();
+            return;
+        }
+
+        this._skinsModalId = this.modalSystem.addModal(
+            420,
+            null,
+            `<div class="modal-skins">
+        <p class="modal-skins-hint">Нажми на картинку — ник и скин станут твоими</p>
+        <div class="modal-skins-grid" data-skins-grid></div>
+        <div class="modal-skins-pages" data-skins-pager></div>
+      </div>`,
+            { title: "Выбери скин" }
+        );
+        this._bindSkinsModalOnce();
+        this._renderSkinsPage();
+    }
+
+    _skinsPagesCount() {
+        return Math.max(1, Math.ceil(getSkinCatalog().length / SKINS_PER_PAGE));
+    }
+
+    /** Окно страниц: &lt; 1 2 3 … last &gt; → &lt; 2 3 4 … last &gt; */
+    _skinsPagerHtml(page, pages) {
+        const windowSize = 3;
+        const last = pages - 1;
+        const from = page;
+        const to = Math.min(last, page + windowSize - 1);
+
+        let mid = "";
+        for (let p = from; p <= to; p++) {
+            const active = p === page ? " is-active" : "";
+            mid += `<button type="button" class="skin-page-btn${active}" data-skin-page="${p}">${p + 1}</button>`;
+        }
+
+        let tail = "";
+        if (last > to) {
+            if (last > to + 1) tail += `<span class="skin-page-ellipsis">…</span>`;
+            const active = last === page ? " is-active" : "";
+            tail += `<button type="button" class="skin-page-btn${active}" data-skin-page="${last}">${pages}</button>`;
+        }
+
+        const prevDis = page <= 0 ? " disabled" : "";
+        const nextDis = page >= last ? " disabled" : "";
+        return `
+      <button type="button" class="skin-nav-arrow" data-skin-nav="-1" aria-label="Назад"${prevDis}>&lt;</button>
+      ${mid}${tail}
+      <button type="button" class="skin-nav-arrow" data-skin-nav="1" aria-label="Дальше"${nextDis}>&gt;</button>`;
+    }
+
+    _skinsGridHtml(page) {
+        const catalog = getSkinCatalog();
+        const start = page * SKINS_PER_PAGE;
+        const slice = catalog.slice(start, start + SKINS_PER_PAGE);
+        const selected = normalizeSkinNick(this.core.store.name || this.nameInput?.value || "");
+        let tiles = "";
+        for (let i = 0; i < slice.length; i++) {
+            const { nick, id } = slice[i];
+            const key = normalizeSkinNick(nick);
+            const sel = key === selected ? " is-selected" : "";
+            tiles += `
+        <button type="button" class="skin-tile${sel}" data-skin-nick="${this.escapeHtml(nick)}" title="${this.escapeHtml(nick)}">
+          <img src="${skinImageUrl(id)}" alt="" loading="lazy" width="58" height="58" />
+          <span class="skin-tile-nick">${this.escapeHtml(nick)}</span>
+        </button>`;
+        }
+        return tiles;
+    }
+
+    _renderSkinsPage() {
+        const root = document.querySelector("#modals-container .modal-skins");
+        if (!root) return;
+        const pages = this._skinsPagesCount();
+        const page = Math.max(0, Math.min(this._skinsPage, pages - 1));
+        this._skinsPage = page;
+
+        const grid = root.querySelector("[data-skins-grid]");
+        const pager = root.querySelector("[data-skins-pager]");
+        if (grid) grid.innerHTML = this._skinsGridHtml(page);
+        if (pager) pager.innerHTML = this._skinsPagerHtml(page, pages);
+    }
+
+    _bindSkinsModalOnce() {
+        const root = document.querySelector("#modals-container .modal-skins");
+        if (!root || root.dataset.bound === "1") return;
+        root.dataset.bound = "1";
+
+        root.addEventListener("click", (e) => {
+            const t = e.target;
+            if (!(t instanceof Element)) return;
+
+            const tile = t.closest(".skin-tile");
+            if (tile && root.contains(tile)) {
+                const nick = tile.getAttribute("data-skin-nick") || "";
+                if (!nick) return;
+                this.applyNickname(nick);
+                root.querySelectorAll(".skin-tile").forEach((el) => el.classList.remove("is-selected"));
+                tile.classList.add("is-selected");
+                return;
+            }
+
+            const pageBtn = t.closest("[data-skin-page]");
+            if (pageBtn && root.contains(pageBtn)) {
+                const p = parseInt(pageBtn.getAttribute("data-skin-page"), 10);
+                if (!Number.isFinite(p)) return;
+                this._skinsPage = p;
+                this._renderSkinsPage();
+                return;
+            }
+
+            const nav = t.closest("[data-skin-nav]");
+            if (nav && root.contains(nav) && !nav.hasAttribute("disabled")) {
+                const d = parseInt(nav.getAttribute("data-skin-nav"), 10) || 0;
+                const pages = this._skinsPagesCount();
+                this._skinsPage = Math.max(0, Math.min(pages - 1, this._skinsPage + d));
+                this._renderSkinsPage();
+            }
+        });
     }
 
     isMobileLayout() {
@@ -1338,7 +1498,8 @@ export class UserInterface {
         this.keysPressed[code] = false;
 
         if (this.isBoostKey(code, keyCode)) {
-            this.stopBoost();
+            // ЛКМ ещё зажат — буст не гасим
+            if (!this._boostMouse) this.stopBoost();
         }
 
         if (code === "KeyW" && this.ejectInterval) {
@@ -1424,6 +1585,8 @@ export class UserInterface {
             if (!cell) continue;
             cell.hasChanged = true;
             cell.name = n;
+            cell._skinNickKey = "";
+            cell._resolveSkin();
         }
 
         if (this.core.app.ownedCells.length > 0) {

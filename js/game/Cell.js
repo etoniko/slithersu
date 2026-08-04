@@ -1,21 +1,29 @@
 import { removeFromArray } from "../utils/array.js";
-import { toPixiColor, colorToCss } from "../utils/colors.js";
+import { toRgbInt, colorToCss } from "../utils/colors.js";
+import { CELL_INTERP_MS } from "./cellSync.js";
 import { getMainSegmentId } from "./segments.js";
+import {
+    skinIdForPlayer,
+    drawSkinnedCell,
+    isTransparentPlayer,
+    isGwelPlayer,
+    updateSkinRotation
+} from "./skins.js";
 
 export class Cell {
     static NAME_CACHE = new Map();
 
-    constructor(core, id, x, y, r, _spriteUnused, name, color) {
+    constructor(core, id, x, y, r, name, color) {
         this.core = core;
         this.id = id;
         this.x = this.nx = this.ox = x;
         this.y = this.ny = this.oy = y;
         this.r = this.nr = this.or = r;
         this._color = color;
-        this._colorNum = toPixiColor(color);
+        this._colorNum = toRgbInt(color);
         this._drawColor = this._colorNum;
         this._name = name;
-        this.updated = Date.now();
+        this.updated = performance.now();
         this.hasChanged = true;
         this._lastScale = r / 256;
         this._lastZIndex = id;
@@ -37,6 +45,7 @@ export class Cell {
         this._boostTintActive = false;
         this._showBoostRing = false;
         this._boostRingAlpha = 0;
+        this._boostFlash = 0;
         this._fadingOut = false;
         this._fadeStart = 0;
         this._fadeDuration = 280;
@@ -45,10 +54,22 @@ export class Cell {
         this.diedBy = 0;
         this.dead = 0;
         this._showName = false;
+        this._waitVisualContact = false;
+        this._contactDeadline = 0;
+        this._skinId = null;
+        this._skinNickKey = "";
+        this._noColorFill = false;
+        this._gwelRotate = false;
+        this._rot = null;
+        this._resolveSkin();
     }
 
     setPlayerId(playerId) {
-        this.playerId = playerId | 0;
+        const pid = playerId | 0;
+        if (this.playerId === pid) return;
+        this.playerId = pid;
+        this._skinNickKey = "";
+        this._resolveSkin();
     }
 
     setAsFood() {
@@ -83,9 +104,13 @@ export class Cell {
     _updateFoodLod(force = false) {
         if (!this.isFood) return;
         const camS = this.core?.app?.camera?.s ?? 1;
-        const cellCount = this.core?.app?.cells?.length || 0;
-        const threshold = cellCount > 800 ? 0.35 : 0.22;
-        const simple = camS < threshold;
+        const r = Number.isFinite(this.r) ? this.r : this.nr || 0;
+        const screenR = r * camS;
+        // 1) обычная еда карты — упрощается раньше
+        // 2) крупная от мёртвых — только при ещё большем отдалении
+        const simple = this.isDeathFood
+            ? (camS < 0.30 || screenR < 3.8)
+            : (camS < 0.55 || screenR < 5.5);
         if (!force && this._foodSimple === simple) return;
         this._foodSimple = simple;
         this._drawColor = this._colorNum >>> 0;
@@ -152,6 +177,7 @@ export class Cell {
     _hideSpeedEdge() {
         this._showBoostRing = false;
         this._boostRingAlpha = 0;
+        this._boostFlash = 0;
         this._clearBoostTint();
     }
 
@@ -181,18 +207,27 @@ export class Cell {
         }
 
         const segIdx = Math.max(0, this.segmentIndex);
+        // Волна света: от головы (0) к хвосту (со скином — цвет клеток, без скина — белый тинт)
         const phase = time * 0.015 - segIdx * 0.16;
         const wave = 0.5 + 0.5 * Math.sin(phase);
         const camS = this.core?.app?.camera?.s ?? 1;
         const far = camS < 0.32;
+        const skinned = !!this._skinId;
 
         if (segIdx > 0) {
             this._showBoostRing = false;
             if (far) {
+                this._boostFlash = 0;
                 this._clearBoostTint();
                 return;
             }
             const t = 0.08 + 0.42 * (wave * wave);
+            if (skinned) {
+                this._clearBoostTint();
+                this._boostFlash = t;
+                return;
+            }
+            this._boostFlash = 0;
             this._drawColor = this._mixBoostTint(t);
             this._boostTintActive = true;
             return;
@@ -200,13 +235,28 @@ export class Cell {
 
         if (far) {
             this._showBoostRing = false;
+            if (skinned) {
+                this._clearBoostTint();
+                this._boostFlash = 0.12 + 0.28 * wave;
+                return;
+            }
+            this._boostFlash = 0;
             this._drawColor = this._mixBoostTint(0.15 + 0.35 * wave);
             this._boostTintActive = true;
             return;
         }
 
+        if (skinned) {
+            // Со скином цветное кольцо буста на голове не рисуем
+            this._showBoostRing = false;
+            this._boostRingAlpha = 0;
+            this._clearBoostTint();
+            this._boostFlash = 0.14 + 0.3 * wave;
+            return;
+        }
         this._showBoostRing = true;
         this._boostRingAlpha = 0.5 + 0.5 * wave;
+        this._boostFlash = 0;
         this._drawColor = this._mixBoostTint(0.18 + 0.32 * wave);
         this._boostTintActive = true;
     }
@@ -221,45 +271,81 @@ export class Cell {
         this.labelAlpha = alpha;
     }
 
+    /** Ник внутри головы: белый + чёрная обводка, высокий DPR чтобы края не пикселили. */
     static _getNameCanvas(name) {
-        if (Cell.NAME_CACHE.has(name)) return Cell.NAME_CACHE.get(name);
+        const key = `inw3|${name}`;
+        if (Cell.NAME_CACHE.has(key)) return Cell.NAME_CACHE.get(key);
 
-        let fontSize = 100;
+        const fontSize = 96;
+        const font = `800 ${fontSize}px Nunito, sans-serif`;
         const measure = document.createElement("canvas").getContext("2d");
-        measure.font = `700 ${fontSize}px Ubuntu, Arial, sans-serif`;
-        let w = measure.measureText(name).width;
-        if (w > 512) {
-            fontSize = Math.max(20, (512 / w) * fontSize);
-            measure.font = `700 ${fontSize}px Ubuntu, Arial, sans-serif`;
-            w = measure.measureText(name).width;
-        }
+        measure.font = font;
+        const textW = Math.ceil(measure.measureText(name).width);
+        const strokeW = 10;
+        const padX = 18 + strokeW;
+        const padY = 14 + strokeW;
+        const cssW = textW + padX * 2;
+        const cssH = fontSize + padY * 2;
 
-        const pad = 16;
-        const h = fontSize + pad * 2;
+        const dpr = 3;
         const canvas = document.createElement("canvas");
-        const dpr = 2;
-        canvas.width = Math.ceil((w + pad * 2) * dpr);
-        canvas.height = Math.ceil(h * dpr);
+        canvas.width = Math.ceil(cssW * dpr);
+        canvas.height = Math.ceil(cssH * dpr);
         const ctx = canvas.getContext("2d");
         ctx.scale(dpr, dpr);
-        ctx.font = `700 ${fontSize}px Ubuntu, Arial, sans-serif`;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.font = font;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.lineJoin = "round";
-        ctx.lineWidth = 10;
-        ctx.strokeStyle = "#000";
-        ctx.fillStyle = "#fff";
-        ctx.strokeText(name, (w + pad * 2) / 2, h / 2);
-        ctx.fillText(name, (w + pad * 2) / 2, h / 2);
+        ctx.miterLimit = 2;
+        ctx.lineWidth = strokeW;
+        ctx.strokeStyle = "#000000";
+        ctx.fillStyle = "#ffffff";
+        const cx = cssW / 2;
+        const cy = cssH / 2;
+        ctx.strokeText(name, cx, cy);
+        ctx.fillText(name, cx, cy);
 
-        const entry = { canvas, cssW: w + pad * 2, cssH: h };
-        Cell.NAME_CACHE.set(name, entry);
+        const entry = { canvas, cssW, cssH };
+        Cell.NAME_CACHE.set(key, entry);
         return entry;
+    }
+
+    _resolveSkin() {
+        if (this.isFood || !this.playerId) {
+            this._skinId = null;
+            this._skinNickKey = "";
+            this._noColorFill = false;
+            this._gwelRotate = false;
+            return;
+        }
+        const next = skinIdForPlayer(this.playerId, this._name);
+        const noFill = isTransparentPlayer(this.playerId, this._name);
+        const gwel = isGwelPlayer(this.playerId, this._name);
+        const key = `${this.playerId}|${this._name || ""}|${next || ""}|${noFill ? 1 : 0}|${gwel ? 1 : 0}`;
+        if (key === this._skinNickKey) return;
+        this._skinNickKey = key;
+        this._skinId = next;
+        this._noColorFill = noFill;
+        this._gwelRotate = gwel;
+    }
+
+    /** Угол головы по вектору движения — одинаково для себя и для зрителей (agar.su / gwel). */
+    _gwelHeadAngle() {
+        if (!this._rot) {
+            this._rot = { target: 0, current: 0, lastAngle: null };
+        }
+        const vx = this.nx - this.ox;
+        const vy = this.ny - this.oy;
+        return updateSkinRotation(this._rot, vx, vy);
     }
 
     set name(value) {
         if (!this.hasChanged) return;
         this._name = value;
+        this._resolveSkin();
         this.syncLabelVisibility();
     }
 
@@ -270,7 +356,7 @@ export class Cell {
     set color(value) {
         if (!this.hasChanged) return;
         this._color = value;
-        this._colorNum = toPixiColor(value);
+        this._colorNum = toRgbInt(value);
         this._drawColor = this._colorNum;
     }
 
@@ -291,7 +377,8 @@ export class Cell {
     }
 
     update(time) {
-        const delta = Math.max(Math.min((time - this.updated) / 80, 1), 0);
+        // Один и тот же интервал для головы и сегментов — иначе тело дёргается относительно камеры
+        const delta = Math.max(0, Math.min(1, (time - this.updated) / CELL_INTERP_MS));
 
         if (this.hasChanged) {
             this.color = this.color;
@@ -313,6 +400,9 @@ export class Cell {
         this._mass = Math.round(this.r * this.r / 100);
         this._lastZIndex = this._segmentZ;
 
+        // Скин следует за ником: смена ника / кэш головы → обновить сегменты
+        if (this.playerId) this._resolveSkin();
+
         this.boostBoosting = this._isNetworkBoosting();
         this._updateSpeedEdgeEffect(time);
     }
@@ -322,6 +412,12 @@ export class Cell {
 
         const r = this.r * (this.drawScale || 1);
         if (r <= 0) return;
+
+        // Далеко / мелко — еда-точка, без бликов; совсем крошечную не рисуем
+        if (this.isFood && this._foodSimple) {
+            const camS = this.core?.app?.camera?.s ?? 1;
+            if (r * camS < 1.15) return;
+        }
 
         const alpha = this.alpha;
         ctx.save();
@@ -339,6 +435,48 @@ export class Cell {
             ctx.fill();
         }
 
+        let skinned = false;
+        if (this._skinId && this.playerId && !this.isFood) {
+            // Скин никогда не теряется от zoom — всегда PNG
+            const isHead = this.segmentIndex <= 0;
+            const rotate = isHead && this._gwelRotate;
+            skinned = drawSkinnedCell(ctx, this._skinId, this.x, this.y, r, {
+                simple: false,
+                noColorFill: this._noColorFill,
+                rotate,
+                angle: rotate ? this._gwelHeadAngle() : 0
+            });
+        }
+        // Ники из transparent.txt — без цветной заливки головы/сегментов
+        if (!skinned && !this._noColorFill) {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+            ctx.fillStyle = colorToCss(this._drawColor);
+            ctx.fill();
+        }
+
+        if (this.isFood && !this._foodSimple) {
+            ctx.beginPath();
+            ctx.arc(this.x - r * 0.27, this.y - r * 0.35, r * 0.27, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255,255,255,0.55)";
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(this.x + r * 0.35, this.y + r * 0.39, r * 0.16, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255,255,255,0.25)";
+            ctx.fill();
+        }
+
+        // Волна буста поверх скина — цвет клетки (_colorNum), не усреднение PNG
+        if (this._boostFlash > 0) {
+            ctx.globalAlpha = alpha * Math.min(0.75, this._boostFlash);
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+            ctx.fillStyle = colorToCss(this._colorNum);
+            ctx.fill();
+            ctx.globalAlpha = alpha;
+        }
+
+        // Кольцо на голове — поверх скина
         if (this._showBoostRing) {
             const cellColor = this._colorNum >>> 0;
             ctx.globalAlpha = alpha * this._boostRingAlpha;
@@ -360,30 +498,19 @@ export class Cell {
             ctx.globalAlpha = alpha;
         }
 
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = colorToCss(this._drawColor);
-        ctx.fill();
-
-        if (this.isFood && !this._foodSimple) {
-            ctx.beginPath();
-            ctx.arc(this.x - r * 0.27, this.y - r * 0.35, r * 0.27, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(255,255,255,0.55)";
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(this.x + r * 0.35, this.y + r * 0.39, r * 0.16, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(255,255,255,0.25)";
-            ctx.fill();
-        }
-
         if (this._showName && this._name) {
             const entry = Cell._getNameCanvas(this._name);
-            // Как в Pixi: ник — дочерний спрайт клетки (локальный масштаб r/256)
-            const invScale = Math.max(0.5, Math.min(1.35, 170 / Math.max(1, this.r)));
-            const cellScale = this.r / 256;
-            const dw = entry.cssW * invScale * cellScale;
-            const dh = entry.cssH * invScale * cellScale;
+            let dh = r * 0.85;
+            let dw = entry.cssW * (dh / entry.cssH);
+            const maxW = r * 1.85;
+            if (dw > maxW) {
+                const s = maxW / dw;
+                dw *= s;
+                dh *= s;
+            }
             ctx.globalAlpha = alpha * this.labelAlpha;
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
             ctx.drawImage(entry.canvas, this.x - dw / 2, this.y - dh / 2, dw, dh);
         }
 
@@ -394,7 +521,7 @@ export class Cell {
         if (this._fadingOut || this.destroyed) return;
         this._fadingOut = true;
         this.destroyed = true;
-        this.dead = this.core.net.now || Date.now();
+        this.dead = performance.now();
         this._fadeStart = this.dead;
         this._fadeStartScale = this._lastScale || (this.r / 256) || 1;
 
@@ -403,6 +530,15 @@ export class Cell {
             this.ox = this.x;
             this.oy = this.y;
             this.updated = this.dead;
+
+            // Еда: ждём визуального касания головы, иначе «съелось раньше, чем видно»
+            if (this.isFood) {
+                this._waitVisualContact = true;
+                this._contactDeadline = this.dead + 240;
+                this._fadeDuration = 200;
+                this.alpha = 1;
+                this.drawScale = 1;
+            }
         }
 
         this.core.app.cellsByID.delete(this.id);
@@ -438,6 +574,35 @@ export class Cell {
     updateFade(now) {
         if (!this._fadingOut) return true;
 
+        if (this._waitVisualContact && this.diedBy) {
+            const killer = this.core.app.cellsByID.get(this.diedBy);
+            if (killer && !killer.destroyed) {
+                const dx = killer.x - this.x;
+                const dy = killer.y - this.y;
+                const dist = Math.hypot(dx, dy);
+                const touchR = Math.max(4, killer.r * 0.92 + this.r * 0.4);
+
+                if (dist > touchR && now < this._contactDeadline) {
+                    // Мягко подтягиваем, если уже рядом — без телепорта к голове
+                    if (dist < killer.r * 5) {
+                        const pull = Math.min(0.22, 10 / Math.max(dist, 1));
+                        this.x += dx * pull;
+                        this.y += dy * pull;
+                    }
+                    this.alpha = 1;
+                    this.drawScale = 1;
+                    this.ox = this.x;
+                    this.oy = this.y;
+                    return false;
+                }
+            }
+
+            this._waitVisualContact = false;
+            this._fadeStart = now;
+            this.ox = this.x;
+            this.oy = this.y;
+        }
+
         const dur = this._fadeDuration || 280;
         const t = Math.max(0, Math.min(1, (now - this._fadeStart) / dur));
         const ease = 1 - (1 - t) * (1 - t);
@@ -463,6 +628,7 @@ export class Cell {
 
     _finishDestroy() {
         this._fadingOut = false;
+        this._waitVisualContact = false;
         this.alpha = 0;
         this._visible = false;
     }
