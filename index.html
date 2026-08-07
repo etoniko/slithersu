@@ -225,24 +225,49 @@ body.platform-tv #name {
 }
 
 input, textarea {
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
 }
 
-/* Без синего выделения текста */
-::selection,
 input::selection,
 textarea::selection {
-  background: transparent;
-  color: inherit;
+  background: #b7def2;
+  color: var(--ink);
 }
-::-moz-selection,
+
 input::-moz-selection,
 textarea::-moz-selection {
-  background: transparent;
-  color: inherit;
+  background: #b7def2;
+  color: var(--ink);
+}
+
+/* Отдельные слои рекламы для меню и экрана смерти */
+.ad-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.ad-overlay.is-active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+#menu-ad {
+  position: fixed;
+  top: 50%;
+  right: calc(50% + 230px);
+  transform: translateY(-50%);
+  width: 300px;
+  height: 500px;
+  overflow: hidden;
 }
 
 /* Главное меню */
@@ -358,7 +383,8 @@ button.button {
   gap: 12px;
 }
 
-#play {
+#play,
+#death-play {
   background: linear-gradient(180deg, #ffd56a, var(--sun));
   color: #5a3a00;
   font-size: 18px;
@@ -367,12 +393,14 @@ button.button {
   box-shadow: 0 6px 0 #e0a810;
 }
 
-#play:hover {
+#play:hover,
+#death-play:hover {
   filter: brightness(1.05);
   box-shadow: 0 8px 0 #e0a810, var(--shadow-sm);
 }
 
-#spectate {
+#spectate,
+#death-spectate {
   background: linear-gradient(180deg, #8fe8c8, var(--mint));
   color: #0a4a35;
   border: 3px solid #2bb882;
@@ -397,6 +425,7 @@ button.button {
 
 /* HUD: только очки слева снизу */
 #score {
+  z-index: 1;
   top: auto;
   bottom: 12px;
   left: 12px;
@@ -407,6 +436,7 @@ button.button {
 
 /* Лидерборд — всё видно сразу, без скролла */
 #leaderboard {
+  z-index: 1;
   top: 12px;
   right: 12px;
   width: 200px;
@@ -1337,6 +1367,14 @@ body.platform-tv .modal-settings-tile:focus-within {
 }
 
 @media (max-width: 900px) {
+  #menu-ad {
+    display: block;
+    width: 300px;
+    height: 500px;
+    left: 16px;
+    right: auto;
+  }
+
   #user-interface {
     width: min(340px, calc(100vw - 20px));
     padding: 22px 16px 18px;
@@ -1367,6 +1405,9 @@ body.platform-tv .modal-settings-tile:focus-within {
     background: rgba(255, 255, 255, 0.58);
     border-radius: 14px;
   }
+  .hud-chat {
+    opacity: 0.5;
+  }
   #chat-content {
     max-height: min(170px, 26vh);
     padding: 6px 8px;
@@ -1376,34 +1417,40 @@ body.platform-tv .modal-settings-tile:focus-within {
   .hud-message-tile { margin-bottom: 2px; padding: 2px 4px; border-radius: 6px; }
 
   #chat-compose {
+    opacity: 0.5;
     bottom: max(96px, 14vh);
     width: min(340px, calc(100vw - 24px));
     padding: 12px 14px;
     font-size: 15px;
   }
 
-  /* Инфо — только очки слева снизу */
+  /* Очки — слева снизу */
   #score {
+    z-index: 1;
+    opacity: 0.5;
     top: auto;
     bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     left: calc(8px + env(safe-area-inset-left, 0px));
-    font-size: 12px;
-    padding: 5px 8px;
-    border-radius: 12px;
-    z-index: 40;
+    right: auto;
+    font-size: 10px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    z-index: 1;
   }
 
-  /* Топ — правый верх, всё видно без скролла (5 + своя позиция) */
   #leaderboard {
     top: calc(8px + env(safe-area-inset-top, 0px));
     right: calc(8px + env(safe-area-inset-right, 0px));
+    bottom: auto;
     width: min(128px, 38vw);
     max-height: none;
-    border-radius: 12px;
+    border-radius: 10px;
+    opacity: 0.5;
+    pointer-events: none;
   }
   #leaderboard .hud-panel-title {
-    font-size: 10px;
-    padding: 5px 6px 3px;
+    font-size: 9px;
+    padding: 4px 5px 2px;
   }
   #leaderboard-list { padding: 3px 4px 4px; }
   #leaderboard .lb-row {
@@ -1421,8 +1468,8 @@ body.platform-tv .modal-settings-tile:focus-within {
   #minimap-grid {
     width: 72px;
     height: 72px;
-    bottom: auto;
-    top: calc(176px + env(safe-area-inset-top, 0px));
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     right: calc(8px + env(safe-area-inset-right, 0px));
     opacity: 0.5;
     border-radius: 10px;
@@ -1430,8 +1477,8 @@ body.platform-tv .modal-settings-tile:focus-within {
   }
 
   body.mobile-play #minimap-grid {
-    top: calc(176px + env(safe-area-inset-top, 0px));
-    bottom: auto;
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     right: calc(8px + env(safe-area-inset-right, 0px));
   }
 }
@@ -1440,13 +1487,29 @@ body.platform-tv .modal-settings-tile:focus-within {
 #mobile-controls {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  /* Ниже menu/death overlay: кнопки не видны в меню, но touch-события
+     всё равно ловит глобальный обработчик MobileControls. */
+  z-index: 90;
   pointer-events: none;
   touch-action: none;
 }
 
 #mobile-controls[hidden] {
   display: none !important;
+}
+
+body.menu-open #mobile-controls,
+body.menu-open #score,
+body.menu-open #leaderboard,
+body.menu-open .hud-chat,
+body.menu-open #chat-compose,
+body.menu-open #minimap-grid {
+  visibility: hidden !important;
+}
+
+body.menu-open .mobile-stick,
+body.menu-open .mobile-cursor {
+  visibility: hidden !important;
 }
 
 .mobile-stick {
@@ -1496,39 +1559,89 @@ body.platform-tv .modal-settings-tile:focus-within {
   opacity: 0.9;
 }
 
-.mobile-split {
+.mobile-menu {
   pointer-events: auto;
   position: absolute;
-  right: calc(14px + env(safe-area-inset-right, 0px));
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.95);
-  background: linear-gradient(180deg, #8fe8c8, var(--mint));
-  color: #0a4a35;
+  right: calc(88px + env(safe-area-inset-right, 0px));
+  top: auto;
+  bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  width: 58px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--ink);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 900;
-  letter-spacing: -0.02em;
-  box-shadow: 0 5px 0 #249e70, 0 8px 16px rgba(36, 158, 112, 0.32);
+  opacity: 0.5;
+  box-shadow: 0 3px 8px rgba(30, 80, 110, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
   user-select: none;
   -webkit-user-select: none;
-  touch-action: none;
-  z-index: 33;
+  touch-action: manipulation;
 }
 
-.mobile-split.is-active {
-  transform: translateY(2px);
-  box-shadow: 0 2px 0 #249e70, 0 4px 10px rgba(36, 158, 112, 0.28);
-  filter: brightness(0.96);
+.mobile-chat {
+  pointer-events: auto;
+  position: absolute;
+  right: calc(88px + env(safe-area-inset-right, 0px));
+  top: auto;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  width: 58px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: rgba(255, 201, 77, 0.5);
+  color: #63320c;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  opacity: 0.5;
+  box-shadow: 0 3px 8px rgba(212, 122, 36, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.mobile-boost-hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 90;
+  max-width: calc(100vw - 32px);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+@media (min-width: 601px) and (max-width: 900px) {
+  #user-interface {
+    left: calc(50% - 52px);
+  }
 }
 
 @media (min-width: 901px) and (pointer: fine) {
   #mobile-controls { display: none !important; }
+}
+
+@media (max-width: 600px) {
+  #menu-ad,
+  .death-ad { display: none !important; }
 }
 
 /* Статистика после смерти */
@@ -1553,6 +1666,8 @@ body.platform-tv .modal-settings-tile:focus-within {
 }
 
 .death-stats-card {
+  position: relative;
+  z-index: 2;
   width: min(460px, 100%);
   background: rgba(255, 255, 255, 0.94);
   border: 2px solid rgba(255, 255, 255, 0.98);
@@ -1560,6 +1675,24 @@ body.platform-tv .modal-settings-tile:focus-within {
   box-shadow: var(--shadow);
   padding: 22px 22px 18px;
   text-align: center;
+}
+
+.death-ad {
+  position: fixed;
+  top: 50%;
+  width: 300px;
+  height: 500px;
+  transform: translateY(-50%);
+  z-index: 1;
+  overflow: hidden;
+}
+
+.death-ad-left {
+  right: calc(50% + 250px);
+}
+
+.death-ad-right {
+  left: calc(50% + 250px);
 }
 
 .death-stats-title {
@@ -1740,9 +1873,15 @@ body.platform-tv #name {
 }
   </style>
 </head>
-<body>
+<body class="menu-open">
   <!-- Статистика после смерти -->
-  <div id="death-stats" class="death-stats" hidden>
+  <div id="death-stats" class="death-stats death-ad-overlay" hidden>
+    <div id="death-ad-left" class="death-ad death-ad-left" aria-label="Реклама">
+      <div id="yandex_rtb_R-A-19715377-2"></div>
+    </div>
+    <div id="death-ad-right" class="death-ad death-ad-right" aria-label="Реклама">
+      <div id="yandex_rtb_R-A-19715377-3"></div>
+    </div>
     <div class="death-stats-card">
       <div class="death-stats-title">Статистика</div>
       <div class="death-stats-sub">Так держать — попробуй ещё раз!</div>
@@ -1797,8 +1936,13 @@ body.platform-tv #name {
     <div class="cloud c6"></div>
   </div>
 
-  <!-- Главное меню -->
-  <div id="user-interface" class="main-container">
+  <!-- Overlay меню: реклама, интерфейс и рейтинг -->
+  <div id="menu-ad-overlay" class="ad-overlay is-active" aria-label="Меню и реклама">
+    <div id="menu-ad">
+      <div id="yandex_rtb_R-A-19715377-1"></div>
+    </div>
+
+    <div id="user-interface" class="main-container">
     <div class="title">Slither Su</div>
     <div class="title-sub">Расти и попадай в топ!</div>
     <div class="input-group">
@@ -1813,10 +1957,10 @@ body.platform-tv #name {
       <button type="button" id="play" class="button">Играть</button>
       <button type="button" id="spectate" class="button">Смотреть</button>
     </div>
-  </div>
+    </div>
 
-  <!-- Рейтинг меню — справа, только при открытом меню -->
-  <div id="menu-rating" class="menu-rating" data-expanded="0">
+    <!-- Рейтинг меню — внутри overlay меню -->
+    <div id="menu-rating" class="menu-rating" data-expanded="0">
     <div class="menu-rating-title">
       <span>Рейтинг</span>
       <button type="button" id="rating-toggle" class="menu-rating-toggle" title="Показать всех" aria-label="Показать всех" aria-expanded="false">
@@ -1824,6 +1968,7 @@ body.platform-tv #name {
       </button>
     </div>
     <div id="rating-list"><div class="lb-empty">Загрузка…</div></div>
+    </div>
   </div>
 
   <!-- HUD -->
@@ -1851,18 +1996,27 @@ body.platform-tv #name {
 
   <canvas id="view"></canvas>
 
-  <!-- Мобильные: свободный джойстик + курсор + Буст -->
+  <!-- Мобильные: свободный джойстик, меню и чат -->
   <div id="mobile-controls" hidden>
     <div id="mobile-stick" class="mobile-stick" hidden aria-hidden="true">
       <div id="mobile-stick-knob" class="mobile-stick-knob"></div>
     </div>
     <div id="mobile-cursor" class="mobile-cursor" aria-hidden="true"></div>
-    <button type="button" id="mobile-split" class="mobile-split" aria-label="Буст">Буст</button>
+    <button type="button" id="mobile-menu" class="mobile-menu" aria-label="Открыть меню">Меню</button>
+    <button type="button" id="mobile-chat" class="mobile-chat" aria-label="Открыть чат">Чат</button>
   </div>
 
   <!-- Окна поверх всего меню / HUD (не внутри #user-interface) -->
   <div id="modals-container" aria-live="polite"></div>
 
+  <script>
+    window.yaContextCb.push(() => {
+      Ya.Context.AdvManager.render({
+        blockId: "R-A-19715377-1",
+        renderTo: "yandex_rtb_R-A-19715377-1"
+      });
+    });
+  </script>
   <script>
     (function () {
       var s = document.createElement("script");

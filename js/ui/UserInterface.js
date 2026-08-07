@@ -10,12 +10,11 @@ import {
     submitYandexScore,
     gameplayStart,
     gameplayStop,
+    getYsdk,
     needsYandexAuthButton,
     isTV,
-    requestFullscreen,
     onHistoryBack,
     dispatchExit,
-    showFullscreenAd,
     showRewardedAd
 } from "../yandex/YandexSDK.js";
 import { TvControls } from "../input/TvControls.js";
@@ -34,7 +33,7 @@ export class UserInterface {
         this.sessionStats = new SessionStats()
         this._lifeActive = false
         this._deathStatsOpen = false
-
+        this._deathFullscreenAdBusy = false
         this.mouse = {
             x: 0,
             y: 0
@@ -96,7 +95,6 @@ export class UserInterface {
         this.tvControls = new TvControls(this)
         this._tvExitOpen = false
         this._tvBackLast = 0
-        if (this.leaderboardPanel) this.leaderboardPanel.style.display = "none";
         this.bindMenuRatingNav();
         this.loadMenuRating();
         this.hideDeathStats();
@@ -104,6 +102,7 @@ export class UserInterface {
         this.makeButtonsFocusable();
         this._adProgress = { ads: 0, blackUnlocked: false, reviveWaitMs: 0 };
         this.updateAdProgressUi();
+        this.removeReviveControlsIfUnavailable();
         onHistoryBack(() => this.handleHistoryBack());
     }
 
@@ -162,7 +161,15 @@ export class UserInterface {
                 el.disabled = false;
             }
         }
-        this.updateReviveButton();
+        if (!booting) this.updateReviveButton();
+    }
+
+    removeReviveControlsIfUnavailable() {
+        const host = String(window.location.hostname || "").toLowerCase();
+        const isYandexHost = host === "yandex.ru" || host.endsWith(".yandex.ru");
+        if (isYandexHost) return;
+        document.getElementById("death-revive")?.remove();
+        document.getElementById("death-revive-hint")?.remove();
     }
 
     updateControlsHint() {
@@ -236,7 +243,7 @@ export class UserInterface {
 
     syncLeaderboardVisibility() {
         if (!this.leaderboardPanel) return;
-        this.leaderboardPanel.style.display = this.hasMenuSky() ? "none" : "";
+        this.leaderboardPanel.style.display = "";
     }
 
     /** Облака разлетаются сразу; небо остаётся до конца PoW. */
@@ -388,20 +395,28 @@ export class UserInterface {
         addEventListener("keydown", this.onKeyDown);
         addEventListener("keyup", this.onKeyUp);
 
-        // Запрет выделения и копирования (включая инпуты)
+        // Разрешаем выделение и копирование текста в полях ввода.
+        const isTextField = (target) => {
+            const tag = target?.tagName;
+            return tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+        };
         document.addEventListener("selectstart", (e) => {
-            e.preventDefault();
+            if (!isTextField(e.target)) e.preventDefault();
         });
         document.addEventListener("copy", (e) => {
-            e.preventDefault();
-            e.clipboardData?.setData("text/plain", "");
+            if (!isTextField(e.target)) {
+                e.preventDefault();
+                e.clipboardData?.setData("text/plain", "");
+            }
         });
         document.addEventListener("cut", (e) => {
-            e.preventDefault();
-            e.clipboardData?.setData("text/plain", "");
+            if (!isTextField(e.target)) {
+                e.preventDefault();
+                e.clipboardData?.setData("text/plain", "");
+            }
         });
         document.addEventListener("contextmenu", (e) => {
-            e.preventDefault();
+            if (!isTextField(e.target)) e.preventDefault();
         });
         // Esc → только меню игры, не выход из окна / fullscreen
         addEventListener("keydown", (e) => {
@@ -443,6 +458,15 @@ export class UserInterface {
         this.chatField?.addEventListener("input", () => {
             const live = sanitizeChatInput(this.chatField.value);
             if (live !== this.chatField.value) this.chatField.value = live;
+        });
+        document.getElementById("mobile-chat")?.addEventListener("click", () => {
+            if (this.isChatComposeOpen()) this.submitChatCompose();
+            else this.openChatCompose();
+        });
+        document.getElementById("mobile-menu")?.addEventListener("click", () => {
+            this.closeChatCompose();
+            this.hideDeathStats();
+            this.setPanelState(true);
         });
         this.core.app.view.addEventListener("mousemove", this.onMouseMove)
         this.core.app.view.addEventListener('wheel', this.onScroll, {
@@ -558,21 +582,9 @@ export class UserInterface {
         this.setPanelState(false);
         this.updateMenuButtons();
 
-        // Сразу по клику: fullscreen + реклама (до долгих await)
-        void requestFullscreen();
-        let entryAdShown = false;
-        if (!this._entryAdShown) {
-            this._entryAdShown = true;
-            try {
-                const ad = await showFullscreenAd();
-                entryAdShown = !!ad.shown;
-            } catch (_) {}
-        }
-
         try {
             await this.ensureConnected();
             await this.fadeMenuSky();
-            if (entryAdShown) this.core.net.reportAdWatched();
             this.core.net.spawn();
             gameplayStart();
         } catch (err) {
@@ -596,6 +608,7 @@ export class UserInterface {
     onYandexReady(identity) {
         this.core.yandex = identity || getIdentity();
         this.updateYandexAuthButton();
+        this.removeReviveControlsIfUnavailable();
     }
 
     updateYandexAuthButton() {
@@ -663,6 +676,24 @@ export class UserInterface {
         if (score > 0) {
             submitYandexScore(score, nick).catch(() => {});
         }
+        this.showDeathFullscreenAd();
+    }
+
+    showDeathFullscreenAd() {
+        if (!this.isMobileLayout() || this._deathFullscreenAdBusy) return;
+        this._deathFullscreenAdBusy = true;
+        window.setTimeout(() => {
+            this._deathFullscreenAdBusy = false;
+            if (!Array.isArray(window.yaContextCb)) return;
+            window.yaContextCb.push(() => {
+                if (typeof Ya === "undefined" || !Ya.Context?.AdvManager) return;
+                Ya.Context.AdvManager.render({
+                    blockId: "R-A-19715377-4",
+                    type: "fullscreen",
+                    platform: "touch"
+                });
+            });
+        }, 1000);
     }
 
     showDeathStats(stats) {
@@ -671,6 +702,11 @@ export class UserInterface {
             return;
         }
         this._deathStatsOpen = true;
+        document.body.classList.remove("menu-open");
+        document.getElementById("menu-ad-overlay")?.classList.remove("is-active");
+        document.body.classList.add("death-stats-open");
+        this.deathStats.classList.add("is-active");
+        this.renderDeathAdsOnce();
         this.closeChatCompose();
         this.userInterface.style.display = "none";
         if (this.menuRating) this.menuRating.hidden = true;
@@ -703,7 +739,18 @@ export class UserInterface {
 
     hideDeathStats() {
         this._deathStatsOpen = false;
-        if (this.deathStats) this.deathStats.hidden = true;
+        document.body.classList.remove("death-stats-open");
+        if (this.deathStats) {
+            this.deathStats.hidden = true;
+            this.deathStats.classList.remove("is-active");
+        }
+    }
+
+    renderDeathAdsOnce() {
+        if (this._deathAdsRendered || typeof Ya === "undefined" || !Ya.Context?.AdvManager) return;
+        this._deathAdsRendered = true;
+        Ya.Context.AdvManager.render({ blockId: "R-A-19715377-2", renderTo: "yandex_rtb_R-A-19715377-2" });
+        Ya.Context.AdvManager.render({ blockId: "R-A-19715377-3", renderTo: "yandex_rtb_R-A-19715377-3" });
     }
 
     onAdProgress(p) {
@@ -727,6 +774,15 @@ export class UserInterface {
     updateReviveButton() {
         const btn = document.getElementById("death-revive");
         const hint = document.getElementById("death-revive-hint");
+        const host = String(window.location.hostname || "").toLowerCase();
+        const isYandexHost = host === "yandex.ru" || host.endsWith(".yandex.ru");
+        if (!isYandexHost || !getYsdk()) {
+            btn?.remove();
+            hint?.remove();
+            return;
+        }
+        if (btn) btn.hidden = false;
+        if (hint) hint.hidden = false;
         const main = btn?.querySelector(".death-revive-main");
         const adLabel = btn?.querySelector(".death-revive-ad-label");
         if (!btn) return;
@@ -876,8 +932,6 @@ export class UserInterface {
         this.scatterMenuClouds();
         this.setPanelState(false);
         this.updateMenuButtons();
-        requestFullscreen().catch(() => {});
-
         try {
             await this.ensureConnected();
             await this.fadeMenuSky();
@@ -1364,6 +1418,11 @@ export class UserInterface {
         this.chatField.hidden = false;
         this.chatField.value = "";
         this._chatOpen = true;
+        const mobileChat = document.getElementById("mobile-chat");
+        if (mobileChat) {
+            mobileChat.textContent = "Отправить";
+            mobileChat.setAttribute("aria-label", "Отправить сообщение");
+        }
         this.stopBoost();
         requestAnimationFrame(() => {
             this.chatField.focus();
@@ -1376,6 +1435,11 @@ export class UserInterface {
         this.chatField.value = "";
         this.chatField.hidden = true;
         this._chatOpen = false;
+        const mobileChat = document.getElementById("mobile-chat");
+        if (mobileChat) {
+            mobileChat.textContent = "Чат";
+            mobileChat.setAttribute("aria-label", "Открыть чат");
+        }
     }
 
     submitChatCompose() {
@@ -1553,6 +1617,8 @@ export class UserInterface {
             this.closeChatCompose();
             this.hideDeathStats();
             this.userInterface.style.display = "grid";
+            document.body.classList.add("menu-open");
+            document.getElementById("menu-ad-overlay")?.classList.add("is-active");
             if (this.menuRating) this.menuRating.hidden = isTV();
             this.syncLeaderboardVisibility();
             this.updateMenuButtons();
@@ -1567,6 +1633,8 @@ export class UserInterface {
             }
         } else {
             this.userInterface.style.display = "none";
+            document.body.classList.remove("menu-open");
+            document.getElementById("menu-ad-overlay")?.classList.remove("is-active");
             if (this.menuRating) this.menuRating.hidden = true;
             this.syncLeaderboardVisibility();
             this.updateMenuButtons();

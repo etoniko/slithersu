@@ -1,7 +1,7 @@
 /**
  * Мобильное управление:
  * - свободный джойстик (появляется под пальцем)
- * - Буст = ускорение
+ * - двойное касание джойстика + удержание второго пальца = буст
  * - квадратный курсор направления
  * - pinch двумя пальцами = зум
  */
@@ -13,11 +13,13 @@ export class MobileControls {
         this.root = document.getElementById("mobile-controls");
         this.stick = document.getElementById("mobile-stick");
         this.stickKnob = document.getElementById("mobile-stick-knob");
-        this.splitBtn = document.getElementById("mobile-split");
         this.cursor = document.getElementById("mobile-cursor");
+        this.boostTouchId = null;
+        this.lastStickTapAt = 0;
+        this.boostHintShown = false;
 
         this.stickTouchId = null;
-        this.splitTouchId = null;
+        this.stickTouchOnUi = false;
         this.radius = 48;
         this.stickSize = 112;
         this.aimPixels = 110;
@@ -36,12 +38,7 @@ export class MobileControls {
         this.onTouchStart = this.onTouchStart.bind(this);
         this.onTouchMove = this.onTouchMove.bind(this);
         this.onTouchEnd = this.onTouchEnd.bind(this);
-        this.onSplitStart = this.onSplitStart.bind(this);
-        this.onSplitEnd = this.onSplitEnd.bind(this);
-
-        this.splitBtn?.addEventListener("touchstart", this.onSplitStart, { passive: false });
-        this.splitBtn?.addEventListener("touchend", this.onSplitEnd, { passive: false });
-        this.splitBtn?.addEventListener("touchcancel", this.onSplitEnd, { passive: false });
+        this.showBoostHintOnce = this.showBoostHintOnce.bind(this);
 
         addEventListener("touchstart", this.onTouchStart, { passive: false, capture: true });
         addEventListener("touchmove", this.onTouchMove, { passive: false, capture: true });
@@ -60,10 +57,8 @@ export class MobileControls {
     shouldShow() {
         if (!this.root) return false;
         if (!this.isMobileLayout()) return false;
-        if (this.ui.userInterface?.style.display !== "none") return false;
         if (this.ui._deathStatsOpen) return false;
-        if (this.ui.core.app.isSpectating) return false;
-        return this.ui.core.app.ownedCells.length > 0;
+        return true;
     }
 
     syncVisibility() {
@@ -76,6 +71,7 @@ export class MobileControls {
         this._active = true;
         this.root.hidden = false;
         document.body.classList.add("mobile-play");
+        this.showBoostHintOnce();
         this.applyAim();
         this.updateCursor();
     }
@@ -87,54 +83,43 @@ export class MobileControls {
         this.root.hidden = true;
         document.body.classList.remove("mobile-play");
         this.stickTouchId = null;
-        this.splitTouchId = null;
+        this.stickTouchOnUi = false;
+        this.boostTouchId = null;
         this.pinchTouchIds = null;
         this.hideStick();
-        this.splitBtn?.classList.remove("is-active");
         if (was) this.ui.stopBoost();
     }
 
     isUiTarget(target) {
         if (!target || !target.closest) return false;
         return !!target.closest(
-            ".hud-chat, #leaderboard, #chat-compose, #mobile-split, input, textarea, button, .menu-rating, #user-interface, #death-stats, .modal-background, .modal"
-        );
-    }
-
-    isOnSplit(clientX, clientY) {
-        if (!this.splitBtn) return false;
-        const r = this.splitBtn.getBoundingClientRect();
-        const pad = 8;
-        return (
-            clientX >= r.left - pad &&
-            clientX <= r.right + pad &&
-            clientY >= r.top - pad &&
-            clientY <= r.bottom + pad
+            ".hud-chat, #leaderboard, #chat-compose, #mobile-chat, input, textarea, button, .menu-rating, #user-interface, #death-stats, .modal-background, .modal"
         );
     }
 
     onTouchStart(e) {
         if (!this._active) return;
 
-        // Pinch: два пальца
-        if (e.touches.length >= 2) {
-            e.preventDefault();
-            this.beginPinch(e.touches[0], e.touches[1]);
-            // сбрасываем стик, если был
-            if (this.stickTouchId != null) {
-                this.stickTouchId = null;
-                this.hideStick();
-            }
-            return;
-        }
-
         const t = e.changedTouches[0];
         if (!t) return;
-        if (this.isUiTarget(e.target) || this.isOnSplit(t.clientX, t.clientY)) return;
-        if (this.stickTouchId != null || this.pinchTouchIds) return;
+        if (this.pinchTouchIds) return;
 
-        e.preventDefault();
+        // Джойстик имеет приоритет и запускается даже при касании UI.
+        // Для кнопок не блокируем нативный click, чтобы они оставались рабочими.
+        const isUiTouch = this.isUiTarget(e.target);
+        if (!isUiTouch) e.preventDefault();
+        const now = Date.now();
+        if (this.stickTouchId != null) return;
+        const isDoubleTap = now - this.lastStickTapAt < 350;
+        this.lastStickTapAt = now;
         this.stickTouchId = t.identifier;
+        this.stickTouchOnUi = isUiTouch;
+        if (isDoubleTap) {
+            this.boostTouchId = t.identifier;
+            this.ui.startBoost();
+            this.showBoostHintOnce();
+        }
+
         // База стика со смещением: палец = прошлое положение ручки → без прыжка в центр
         this.showStickAt(t.clientX, t.clientY);
         this.moveStick(t.clientX, t.clientY);
@@ -152,7 +137,7 @@ export class MobileControls {
         }
 
         if (this.stickTouchId == null) return;
-        e.preventDefault();
+        if (!this.stickTouchOnUi) e.preventDefault();
         for (const t of e.changedTouches) {
             if (t.identifier === this.stickTouchId) {
                 this.moveStick(t.clientX, t.clientY);
@@ -175,11 +160,26 @@ export class MobileControls {
             return;
         }
 
+        if (this.boostTouchId != null) {
+            for (const t of e.changedTouches) {
+                if (t.identifier === this.boostTouchId) {
+                    if (!this.stickTouchOnUi) e.preventDefault();
+                    this.boostTouchId = null;
+                    this.ui.stopBoost();
+                    this.stickTouchId = null;
+                    this.hideStick();
+                    this.applyAim();
+                    this.updateCursor();
+                    return;
+                }
+            }
+        }
         if (this.stickTouchId == null) return;
         for (const t of e.changedTouches) {
             if (t.identifier === this.stickTouchId) {
-                e.preventDefault();
+                if (!this.stickTouchOnUi) e.preventDefault();
                 this.stickTouchId = null;
+                this.stickTouchOnUi = false;
                 this.hideStick();
                 this.applyAim();
                 this.updateCursor();
@@ -267,27 +267,15 @@ export class MobileControls {
         this.cursor.style.top = `${this.ui.mouse.y}px`;
     }
 
-    onSplitStart(e) {
-        if (!this._active) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const t = e.changedTouches[0];
-        if (!t) return;
-        this.splitTouchId = t.identifier;
-        this.splitBtn?.classList.add("is-active");
-        this.ui.startBoost();
+    showBoostHintOnce() {
+        if (this.boostHintShown || localStorage.getItem("slither-mobile-boost-hint")) return;
+        this.boostHintShown = true;
+        localStorage.setItem("slither-mobile-boost-hint", "1");
+        const hint = document.createElement("div");
+        hint.className = "mobile-boost-hint";
+        hint.textContent = "Дважды коснитесь джойстика и удерживайте второе касание — буст";
+        document.body.appendChild(hint);
+        setTimeout(() => hint.remove(), 4500);
     }
 
-    onSplitEnd(e) {
-        if (this.splitTouchId == null) return;
-        for (const t of e.changedTouches) {
-            if (t.identifier === this.splitTouchId) {
-                e.preventDefault();
-                this.splitTouchId = null;
-                this.splitBtn?.classList.remove("is-active");
-                this.ui.stopBoost();
-                break;
-            }
-        }
-    }
 }
