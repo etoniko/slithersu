@@ -747,10 +747,23 @@ export class UserInterface {
     }
 
     renderDeathAdsOnce() {
-        if (this._deathAdsRendered || typeof Ya === "undefined" || !Ya.Context?.AdvManager) return;
+        if (this._deathAdsRendered) return;
         this._deathAdsRendered = true;
-        Ya.Context.AdvManager.render({ blockId: "R-A-19715377-2", renderTo: "yandex_rtb_R-A-19715377-2" });
-        Ya.Context.AdvManager.render({ blockId: "R-A-19715377-3", renderTo: "yandex_rtb_R-A-19715377-3" });
+        window.yaContextCb = window.yaContextCb || [];
+        window.yaContextCb.push(() => {
+            if (typeof Ya === "undefined" || !Ya.Context?.AdvManager) {
+                this._deathAdsRendered = false;
+                return;
+            }
+            Ya.Context.AdvManager.render({
+                blockId: "R-A-19715377-2",
+                renderTo: "yandex_rtb_R-A-19715377-2"
+            });
+            Ya.Context.AdvManager.render({
+                blockId: "R-A-19715377-3",
+                renderTo: "yandex_rtb_R-A-19715377-3"
+            });
+        });
     }
 
     onAdProgress(p) {
