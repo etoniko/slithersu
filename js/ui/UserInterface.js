@@ -682,18 +682,18 @@ export class UserInterface {
     showDeathFullscreenAd() {
         if (!this.isMobileLayout() || this._deathFullscreenAdBusy) return;
         this._deathFullscreenAdBusy = true;
-        window.setTimeout(() => {
-            this._deathFullscreenAdBusy = false;
-            if (!Array.isArray(window.yaContextCb)) return;
-            window.yaContextCb.push(() => {
+        window.yaContextCb = window.yaContextCb || [];
+        window.yaContextCb.push(() => {
+            window.setTimeout(() => {
+                this._deathFullscreenAdBusy = false;
                 if (typeof Ya === "undefined" || !Ya.Context?.AdvManager) return;
                 Ya.Context.AdvManager.render({
                     blockId: "R-A-19715377-4",
                     type: "fullscreen",
                     platform: "touch"
                 });
-            });
-        }, 1000);
+            }, 1000);
+        });
     }
 
     showDeathStats(stats) {
