@@ -1229,13 +1229,13 @@ export class UserInterface {
     }
 
     ratingsBaseUrl() {
-        const wsUrl = this.core.net?.ws?.url || this.core.defaultServerUrl || "wss://sixz.ru/slither";
+        const wsUrl = this.core.net?.ws?.url || this.core.defaultServerUrl || "wss://sixz.ru:6009";
         try {
             const u = new URL(String(wsUrl).replace(/^ws/i, "http"));
             const basePath = (u.pathname || "").replace(/\/+$/, "");
             return `${u.protocol}//${u.host}${basePath}/ratings`;
         } catch (_) {
-            return "https://sixz.ru/slither/ratings";
+            return "https://sixz.ru:6009/ratings";
         }
     }
 
