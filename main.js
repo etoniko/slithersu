@@ -4818,7 +4818,7 @@ class UserInterface {
         }
         this._deathStatsOpen = true;
         document.body.classList.remove("menu-open");
-        document.getElementById("menu-ad-overlay")?.classList.remove("is-active");
+        document.getElementById("menu-screen")?.classList.remove("is-open");
         document.body.classList.add("death-stats-open");
         this.deathStats.classList.add("is-active");
         this.renderDeathAdsOnce();
@@ -4888,7 +4888,7 @@ class UserInterface {
     }
 
     updateAdProgressUi() {
-        const el = document.getElementById("ad-progress");
+        const el = document.getElementById("unlock-progress");
         if (!el) return;
         const ads = this._adProgress?.ads | 0;
         const need = BLACK_UNLOCK_ADS;
@@ -5746,7 +5746,7 @@ class UserInterface {
             this.hideDeathStats();
             this.userInterface.style.display = "grid";
             document.body.classList.add("menu-open");
-            document.getElementById("menu-ad-overlay")?.classList.add("is-active");
+            document.getElementById("menu-screen")?.classList.add("is-open");
             if (this.menuRating) this.menuRating.hidden = isTV();
             this.syncLeaderboardVisibility();
             this.updateMenuButtons();
@@ -5762,7 +5762,7 @@ class UserInterface {
         } else {
             this.userInterface.style.display = "none";
             document.body.classList.remove("menu-open");
-            document.getElementById("menu-ad-overlay")?.classList.remove("is-active");
+            document.getElementById("menu-screen")?.classList.remove("is-open");
             if (this.menuRating) this.menuRating.hidden = true;
             this.syncLeaderboardVisibility();
             this.updateMenuButtons();
