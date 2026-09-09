@@ -1946,6 +1946,10 @@ body.platform-tv #name {
 
   <!-- Главное меню (без "ad" в id/class — иначе adblock прячет панель) -->
   <div id="menu-screen" class="menu-screen is-open">
+      <!-- RTB отдельно — блокировщик может скрыть, меню останется -->
+  <div id="menu-side" class="menu-side" aria-hidden="true">
+    <div id="yandex_rtb_R-A-19715377-1"></div>
+  </div>
     <div id="user-interface" class="main-container">
     <div class="title">Slither Su</div>
     <div class="title-sub">Расти и попадай в топ!</div>
@@ -1972,11 +1976,6 @@ body.platform-tv #name {
     </div>
     <div id="rating-list"><div class="lb-empty">Загрузка…</div></div>
     </div>
-  </div>
-
-  <!-- RTB отдельно — блокировщик может скрыть, меню останется -->
-  <div id="menu-side" class="menu-side" aria-hidden="true">
-    <div id="yandex_rtb_R-A-19715377-1"></div>
   </div>
 
   <!-- HUD -->
