@@ -257,17 +257,32 @@ textarea::-moz-selection {
   pointer-events: auto;
 }
 
-/* Боковой RTB — отдельно от меню, может быть скрыт блокировщиком */
-.menu-side {
+/* Нижний горизонтальный RTB (Yandex: ~100% × 90 на десктопе) */
+.menu-floor-ad {
   position: fixed;
-  top: 50%;
-  right: calc(50% + 230px);
-  transform: translateY(-50%);
-  width: 300px;
-  height: 500px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 90px;
+  z-index: 220;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
-  z-index: 190;
-  pointer-events: none;
+  pointer-events: auto;
+  box-shadow: 0 -4px 16px rgba(30, 80, 110, 0.12);
+}
+
+.menu-screen:not(.is-open) .menu-floor-ad {
+  display: none;
+}
+
+.menu-floor-ad > div {
+  width: 100%;
+  height: 90px;
+  max-height: 90px;
 }
 
 /* Главное меню */
@@ -1375,12 +1390,13 @@ body.platform-tv .modal-settings-tile:focus-within {
 }
 
 @media (max-width: 900px) {
-  .menu-side {
-    display: block;
-    width: 300px;
-    height: 500px;
-    left: 16px;
-    right: auto;
+  .menu-floor-ad {
+    height: 100px;
+  }
+
+  .menu-floor-ad > div {
+    height: 100px;
+    max-height: 100px;
   }
 
   #user-interface {
@@ -1637,19 +1653,19 @@ body.menu-open .mobile-cursor {
   opacity: 0.5;
 }
 
-@media (min-width: 601px) and (max-width: 900px) {
-  #user-interface {
-    left: calc(50% - 52px);
-  }
-}
-
 @media (min-width: 901px) and (pointer: fine) {
   #mobile-controls { display: none !important; }
 }
 
 @media (max-width: 600px) {
-  .menu-side,
   .death-side { display: none !important; }
+  .menu-floor-ad {
+    height: 90px;
+  }
+  .menu-floor-ad > div {
+    height: 90px;
+    max-height: 90px;
+  }
 }
 
 /* Статистика после смерти */
@@ -1946,10 +1962,6 @@ body.platform-tv #name {
 
   <!-- Главное меню (без "ad" в id/class — иначе adblock прячет панель) -->
   <div id="menu-screen" class="menu-screen is-open">
-      <!-- RTB отдельно — блокировщик может скрыть, меню останется -->
-  <div id="menu-side" class="menu-side" aria-hidden="true">
-    <div id="yandex_rtb_R-A-19715377-1"></div>
-  </div>
     <div id="user-interface" class="main-container">
     <div class="title">Slither Su</div>
     <div class="title-sub">Расти и попадай в топ!</div>
@@ -1975,6 +1987,11 @@ body.platform-tv #name {
       </button>
     </div>
     <div id="rating-list"><div class="lb-empty">Загрузка…</div></div>
+    </div>
+
+    <!-- Горизонтальный RTB внизу: контейнер 100% × 90 (десктоп) / × 100 (планшет) -->
+    <div id="menu-floor-ad" class="menu-floor-ad" aria-hidden="true">
+      <div id="yandex_rtb_R-A-19715377-1"></div>
     </div>
   </div>
 
