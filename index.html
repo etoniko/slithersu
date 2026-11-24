@@ -6539,6 +6539,7 @@ class Network {
         SPLIT_PLAYER: 0x11,
         BOOST_START: 17,
         BOOST_STOP: 18,
+        VIEW_SIZE: 19,
         SPLIT_MINION: 0x16,
         EJECT_PLAYER: 0x15,
         EJECT_MINION: 0x17,
@@ -6702,7 +6703,10 @@ class Network {
             }
 
         }, 3000);
-        this.mouseMoveInterval = setInterval(() => this.sendMouseMove(), 40);
+        this.mouseMoveInterval = setInterval(() => {
+            this.sendMouseMove();
+            this.sendViewSize();
+        }, 40);
     }
 
     async onPowChallenge(reader) {
@@ -6976,6 +6980,34 @@ class Network {
         msg.setFloat64(1, dx, true);
         msg.setFloat64(9, dy, true);
         msg.setUint32(17, 0, true);
+        this.send(msg.buffer);
+    }
+
+    /** Полуразмер кадра в мире. Сервер не шлёт то, что за приближённым зумом. */
+    sendViewSize() {
+        if (!this.ws || this.ws.readyState !== 1) return;
+        const app = this.core.app;
+        const zoom = app.camera?.s || 0;
+        if (!(zoom > 0)) return;
+
+        const cssW = app._viewCssW || innerWidth;
+        const cssH = app._viewCssH || innerHeight;
+        const halfW = cssW / (2 * zoom);
+        const halfH = cssH / (2 * zoom);
+        if (!Number.isFinite(halfW) || !Number.isFinite(halfH)) return;
+        if (
+            Math.abs(halfW - (this._sentViewX || 0)) < 8 &&
+            Math.abs(halfH - (this._sentViewY || 0)) < 8
+        ) {
+            return;
+        }
+
+        this._sentViewX = halfW;
+        this._sentViewY = halfH;
+        const msg = prepareData(9);
+        msg.setUint8(0, Network.CLIENT_TO_SERVER.VIEW_SIZE);
+        msg.setFloat32(1, halfW, true);
+        msg.setFloat32(5, halfH, true);
         this.send(msg.buffer);
     }
 
