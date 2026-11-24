@@ -472,9 +472,9 @@ opacity: .4;
 #leaderboard {
   z-index: 45;
   top: 4px;
-  right: 34px;
-  width: max-content;
-  max-width: 220px;
+  right: 10px;
+  width: 231px;
+  max-width: min(231px, calc(100vw - 16px));
   max-height: none;
   overflow: visible;
   padding: 0;
@@ -519,31 +519,34 @@ opacity: .4;
 #leaderboard .lb-row {
   display: grid;
   width: 100%;
-  grid-template-columns: 1.8em minmax(0, 1fr);
+  grid-template-columns: 2.6em minmax(0, 1fr) 4.2em;
   align-items: center;
   column-gap: 8px;
-  padding: 1px 0;
+  padding: 1px 4px;
   margin: 0;
   border: none;
-  border-radius: 0;
+  border-radius: 3px;
   background: transparent;
   box-shadow: none;
   min-height: 0;
   color: #d0d0d0;
+  box-sizing: border-box;
 }
 
 #leaderboard .lb-row.lb-me {
   font-weight: 800;
+  background: transparent;
 }
 
 #leaderboard .lb-rank {
   width: auto;
   height: auto;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   border-radius: 0;
   background: none;
   color: inherit;
+  text-align: right;
 }
 
 #leaderboard .lb-name-wrap {
@@ -554,13 +557,33 @@ opacity: .4;
 
 #leaderboard .lb-name {
   min-width: 0;
-  font-size: 14px;
+  width: 100%;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: inherit;
+}
+
+#leaderboard .lb-score {
+  width: 100%;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+  padding-left: 0;
+  text-align: right;
+}
+
+#leaderboard .lb-row.lb-me .lb-rank,
+#leaderboard .lb-row.lb-me .lb-name {
+  font-size: 14px;
+}
+
+#leaderboard .lb-row.lb-me .lb-score {
+  font-size: 13px;
 }
 
 #leaderboard .lb-empty {
@@ -1421,10 +1444,10 @@ body.platform-tv .modal-settings-tile:focus-within {
 
   #leaderboard {
     top: calc(4px + env(safe-area-inset-top, 0px));
-    right: calc(28px + env(safe-area-inset-right, 0px));
+    right: calc(10px + env(safe-area-inset-right, 0px));
     bottom: auto;
-    width: max-content;
-    max-width: min(180px, 70vw);
+    width: min(231px, calc(100vw - 16px));
+    max-width: min(231px, calc(100vw - 16px));
     max-height: none;
     pointer-events: none;
   }
@@ -1434,12 +1457,16 @@ body.platform-tv .modal-settings-tile:focus-within {
     padding: 0 0 3px;
   }
   #leaderboard .lb-row {
-    grid-template-columns: 1.6em minmax(0, 1fr);
-    column-gap: 4px;
-    padding: 0;
+    grid-template-columns: 2em minmax(0, 1fr) 3.6em;
+    column-gap: 6px;
+    padding: 0 2px;
   }
   #leaderboard .lb-rank,
-  #leaderboard .lb-name { font-size: 11px; }
+  #leaderboard .lb-name,
+  #leaderboard .lb-score { font-size: 10px; }
+  #leaderboard .lb-row.lb-me .lb-rank,
+  #leaderboard .lb-row.lb-me .lb-name,
+  #leaderboard .lb-row.lb-me .lb-score { font-size: 11px; }
 
   #minimap-grid {
     width: 64px;
@@ -5043,6 +5070,12 @@ const SlitherLook = (() => {
     return { nearest, blit, shadow };
 })();
 
+const DEATH_FOOD_HEART = new Image();
+DEATH_FOOD_HEART.src = "./helper_anim.png";
+const DEATH_FOOD_FRAME = 128;
+const DEATH_FOOD_FRAMES = 6;
+const DEATH_FOOD_FRAME_MS = 120;
+
 
 class Cell {
     static NAME_CACHE = new Map();
@@ -5456,11 +5489,29 @@ class Cell {
 
         if (this.isFood) {
             if (this.isDeathFood) {
-                const coreR = r * 1.5;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, coreR, 0, Math.PI * 2);
-                ctx.fillStyle = "#808080";
-                ctx.fill();
+                if (!this._drawHeart) {
+                    ctx.restore();
+                    return;
+                }
+                const size = r * 3.2;
+                if (DEATH_FOOD_HEART.complete && DEATH_FOOD_HEART.naturalWidth > 0) {
+                    const frame = Math.floor(performance.now() / DEATH_FOOD_FRAME_MS) % DEATH_FOOD_FRAMES;
+                    const sx = frame * DEATH_FOOD_FRAME;
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(
+                        DEATH_FOOD_HEART,
+                        sx, 0, DEATH_FOOD_FRAME, DEATH_FOOD_FRAME,
+                        this.x - size / 2,
+                        this.y - size / 2,
+                        size,
+                        size
+                    );
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, r * 1.5, 0, Math.PI * 2);
+                    ctx.fillStyle = "#808080";
+                    ctx.fill();
+                }
                 ctx.restore();
                 return;
             }
@@ -6297,6 +6348,27 @@ class Application {
         foodList.sort((a, b) => (a._segmentZ || 0) - (b._segmentZ || 0));
         snakeList.sort((a, b) => (a._segmentZ || 0) - (b._segmentZ || 0));
 
+        const hearts = [];
+        for (let i = 0; i < foodList.length; i++) {
+            const cell = foodList[i];
+            cell._drawHeart = false;
+            if (!cell.isDeathFood || ((cell.id >>> 0) & 1) !== 0) continue;
+            hearts.push(cell);
+        }
+        if (hearts.length > 128) {
+            const cx = this.camera.x;
+            const cy = this.camera.y;
+            hearts.sort((a, b) => {
+                const dax = a.x - cx;
+                const day = a.y - cy;
+                const dbx = b.x - cx;
+                const dby = b.y - cy;
+                return (dax * dax + day * day) - (dbx * dbx + dby * dby);
+            });
+            hearts.length = 128;
+        }
+        for (let i = 0; i < hearts.length; i++) hearts[i]._drawHeart = true;
+
         for (let i = 0; i < foodList.length; i++) {
             foodList[i].draw(ctx);
         }
@@ -6983,9 +7055,21 @@ class Network {
         for (let i = 0; i < count; ++i) {
             const playerId = reader.getUint32() // pID игрока с сервера
             const name = reader.getStringUTF16()
-            const playerXp = reader.getUint32();
-            const playerLevel = playerXp ? getLevel(playerXp) : -1; // TODO...
-            this.leaderboardItems.push({ id: playerId, playerId, name: name, level: playerLevel, score: playerXp >>> 0 })
+            const score = reader.getUint32() >>> 0;
+            const r = reader.getUint8();
+            const g = reader.getUint8();
+            const b = reader.getUint8();
+            const rank = reader.getUint16();
+            const playerLevel = score ? getLevel(score) : -1;
+            this.leaderboardItems.push({
+                id: playerId,
+                playerId,
+                name,
+                level: playerLevel,
+                score,
+                rank,
+                color: ((r << 16) | (g << 8) | b) >>> 0
+            })
         }
         this.core.ui.updateLeaderboard()
     }
@@ -7252,6 +7336,23 @@ class Network {
                         }
                     }
                 }
+            }
+
+            for (let id; id = reader.uint32();) {
+                if (!reader.canRead) break;
+                const posX = reader.int32();
+                const posY = reader.int32();
+                const size = reader.uint16();
+                const cell = cellsByID.get(id);
+                if (!cell || cell.destroyed || cell._fadingOut) continue;
+                if (!isValidCellState(posX, posY, size)) continue;
+
+                const isOwned = cell.playerId === ownerId && !app.snakeEnded && !cell.isFood && !cell.isDeathFood;
+                const instant = isOwned && (
+                    shouldSnapCell(cell, posX, posY, border) ||
+                    ownedPositions[id] == null
+                );
+                applyServerCellState(cell, posX, posY, size, this.now, instant);
             }
 
             while (reader.canRead) {
@@ -8459,29 +8560,50 @@ class UserInterface {
             .replace(/"/g, "&quot;");
     }
 
+    _lbAlpha(rank) {
+        const table = [0.9, 0.8, 0.8, 0.6, 0.6, 0.4, 0.4, 0.2, 0.2, 0.1];
+        const index = (rank | 0) - 1;
+        if (index < 0) return table[0];
+        if (index >= table.length) return table[table.length - 1];
+        return table[index];
+    }
+
+    _lbColor(rgb, isMe, alpha) {
+        const a = Math.max(0, Math.min(1, alpha));
+        if (!rgb) return isMe ? `rgba(255,255,255,${a})` : `rgba(163,163,163,${a})`;
+        let r = (rgb >> 16) & 255;
+        let g = (rgb >> 8) & 255;
+        let b = rgb & 255;
+        if (isMe) {
+            r = Math.min(255, r + 48);
+            g = Math.min(255, g + 48);
+            b = Math.min(255, b + 48);
+        } else {
+            r = (r * 0.74) | 0;
+            g = (g * 0.74) | 0;
+            b = (b * 0.74) | 0;
+        }
+        return `rgba(${r},${g},${b},${a})`;
+    }
+
     makeLeaderboardRow(player, rank, isMe) {
         const row = document.createElement("div");
         row.className = "lb-row" + (isMe ? " lb-me" : "");
-        const fade = rank <= 1 ? 1
-            : rank === 2 ? 0.86
-            : rank === 3 ? 0.72
-            : rank === 4 ? 0.46
-            : rank === 5 ? 0.34
-            : Math.max(0.12, 0.22 - (rank - 6) * 0.025);
-        row.style.opacity = String(fade);
-        const name = this.escapeHtml(player.name || "");
+        const alpha = isMe ? 1 : this._lbAlpha(rank);
+        row.style.opacity = "1";
         if (isMe) {
-            const rgb = this._mySnakeColor();
-            if (rgb) {
-                const r = (rgb >> 16) & 255;
-                const g = (rgb >> 8) & 255;
-                const b = rgb & 255;
-                row.style.color = `rgb(${r},${g},${b})`;
-            }
+            const mine = player.color || this._mySnakeColor();
+            row.style.color = this._lbColor(mine, true, 1);
+            row.style.backgroundColor = "transparent";
+        } else {
+            row.style.color = this._lbColor(player.color || 0, false, alpha);
         }
+        const name = this.escapeHtml(player.name || "");
+        const score = (player.score | 0).toString();
         row.innerHTML = `
-            <span class="lb-rank">${rank}.</span>
-            <span class="lb-name">${name}</span>`;
+            <span class="lb-rank">#${rank}</span>
+            <span class="lb-name">${name}</span>
+            <span class="lb-score">${score}</span>`;
         return row;
     }
 
@@ -8515,8 +8637,7 @@ class UserInterface {
             return;
         }
 
-        // ПК: топ-10, телефон: топ-5; себя — отдельной строкой, если не в топе
-        const topN = this.isMobileLayout() ? 5 : 10;
+        const topN = 10;
         const myId = this.core.net.ownerPlayerId >>> 0;
         let myIndex = -1;
         if (myId) {
@@ -8530,7 +8651,8 @@ class UserInterface {
 
         const top = all.slice(0, topN);
         for (let i = 0; i < top.length; i++) {
-            fragment.appendChild(this.makeLeaderboardRow(top[i], i + 1, myIndex === i));
+            const rank = top[i].rank || (i + 1);
+            fragment.appendChild(this.makeLeaderboardRow(top[i], rank, myIndex === i));
         }
 
         if (myIndex >= topN) {
@@ -8538,7 +8660,8 @@ class UserInterface {
             sep.className = "lb-sep";
             sep.setAttribute("aria-hidden", "true");
             fragment.appendChild(sep);
-            fragment.appendChild(this.makeLeaderboardRow(all[myIndex], myIndex + 1, true));
+            const me = all[myIndex];
+            fragment.appendChild(this.makeLeaderboardRow(me, me.rank || (myIndex + 1), true));
         }
 
         this.leaderboard.innerHTML = "";
