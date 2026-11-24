@@ -2149,6 +2149,43 @@ input::-moz-selection, textarea::-moz-selection {
 .button-group { gap: 8px; margin: 22px 0 10px; }
 .primary-buttons { gap: 10px; margin-top: 8px; }
 
+.menu-promo {
+  position: relative;
+  display: block;
+  height: 72px;
+  margin-top: 10px;
+  overflow: hidden;
+  line-height: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+.menu-promo-link {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+.menu-promo-video {
+  display: block;
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  background: transparent;
+}
+
 .button,
 button.button,
 #yandex-auth.button {
@@ -2881,6 +2918,10 @@ body.platform-tv .modal-settings-tile:focus-within {
       <button type="button" id="play" class="button"><span class="material-symbols-outlined btn-ico" aria-hidden="true">sports_esports</span><span class="btn-label">Играть</span></button>
       <button type="button" id="spectate" class="button"><span class="material-symbols-outlined btn-ico" aria-hidden="true">visibility</span><span class="btn-label">Наблюдать</span></button>
     </div>
+    <a class="menu-promo" href="https://agar.su" target="_blank" rel="noopener">
+      <span class="menu-promo-link">Game Play - agar.su</span>
+      <video class="menu-promo-video" src="./viedo.mp4" autoplay muted loop playsinline disablepictureinpicture></video>
+    </a>
     </div>
 
     <div id="menu-rating" class="menu-rating" data-expanded="0">
