@@ -2874,8 +2874,8 @@ body.platform-tv .modal-settings-tile:focus-within {
 "use strict";
 
 /* --- js/config/servers.js --- */
-/** Единственный игровой сервер (WSS через прокси sixz.ru). */
-const SERVER_HOST = "sixz.ru:6009";
+/** Единственный игровой сервер (WSS через прокси server.slither.su). */
+const SERVER_HOST = "server.slither.su";
 const SERVER_WS_URL = `wss://${SERVER_HOST}`;
 const servers = {
   [SERVER_HOST]: { name: "FFA" }
@@ -8693,13 +8693,13 @@ class UserInterface {
     }
 
     ratingsBaseUrl() {
-        const wsUrl = this.core.net?.ws?.url || this.core.defaultServerUrl || "wss://sixz.ru:6009";
+        const wsUrl = this.core.net?.ws?.url || this.core.defaultServerUrl || "wss://server.slither.su";
         try {
             const u = new URL(String(wsUrl).replace(/^ws/i, "http"));
             const basePath = (u.pathname || "").replace(/\/+$/, "");
             return `${u.protocol}//${u.host}${basePath}/ratings`;
         } catch (_) {
-            return "https://sixz.ru:6009/ratings";
+            return "https://server.slither.su/ratings";
         }
     }
 
