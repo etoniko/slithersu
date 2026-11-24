@@ -87,7 +87,7 @@ body {
   z-index: 5;
   pointer-events: none;
   overflow: hidden;
-  background: #0d0d0d;
+  background: #161c22;
   transition: opacity 0.85s ease-out;
 }
 
@@ -333,8 +333,8 @@ input#name {
 }
 
 input#name:focus {
-  border-color: var(--mint);
-  box-shadow: 0 0 0 4px rgba(62, 207, 154, 0.25);
+  border-color: #0544d5;
+  box-shadow: none;
 }
 
 input#name::placeholder {
@@ -1890,7 +1890,7 @@ body { background: #161c22; color: #eceae6; }
 .menu-screen:not(.is-open) .aurora-brand { display: none; }
 .aurora-brand {
   position: fixed;
-  top: 28px;
+  top: 100px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 220;
@@ -1899,46 +1899,47 @@ body { background: #161c22; color: #eceae6; }
   pointer-events: none;
   background: transparent;
 }
-.aurora-brand__title {
-  display: inline-block;
-  font-family: Inter, Nunito, sans-serif;
-  font-size: clamp(2.4rem, 6vw, 4.08rem);
-  font-weight: 800;
-  letter-spacing: clamp(-1.75px, -0.25vw, -3.5px);
-  line-height: 0.95;
-  color: #fff;
-  position: relative;
+.logo-slot {
+  width: min(500px, 94vw);
+  height: 115px;
+  margin: 0 auto;
   overflow: hidden;
-  background: #000;
-  margin: 0;
-  -webkit-mask-image: linear-gradient(#000 0 0);
-  mask-image: linear-gradient(#000 0 0);
-  -webkit-mask-clip: text;
-  mask-clip: text;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
 }
-.aurora-brand__sub {
-  margin: 8px 0 0;
-  font-family: Inter, Nunito, sans-serif;
+.logo-slot canvas {
+  width: 1000px;
+  height: 270px;
+  transform: scale(0.5);
+  transform-origin: 0% 0%;
+  display: block;
+  opacity: 1;
+}
+@media (max-width: 520px) {
+  .aurora-brand { width: 100%; }
+  .logo-slot { width: 78vw; height: calc(78vw * 115 / 500); }
+  .logo-slot canvas {
+    width: 78vw;
+    height: calc(78vw * 270 / 1000);
+    transform: none;
+  }
+  #tips {
+    width: 92vw;
+    height: auto;
+    min-height: 30px;
+    font-size: 12px;
+    line-height: 15px;
+  }
+}
+#tips {
+  margin: 6px auto 0;
+  width: min(360px, 92vw);
+  height: 30px;
+  color: rgba(255,255,255,0.62);
+  text-align: center;
   font-size: 14px;
-  font-weight: 400;
-  color: #fff;
-}
-.online-line {
-  position: absolute;
-  top: 0;
-  left: 100%;
-  text-align: left;
-  white-space: nowrap;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1;
+  font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+  line-height: 30px;
   pointer-events: none;
 }
-.online-label { color: #9a9a9a; }
-#online-count { color: #fff; }
-
 .menu-gear {
   position: fixed;
   top: calc(16px + env(safe-area-inset-top, 0px));
@@ -1989,6 +1990,10 @@ body { background: #161c22; color: #eceae6; }
   overflow: hidden;
   cursor: pointer;
   box-shadow: none;
+  transition: border-color 0.2s;
+}
+.nick-row:has(input#name:focus) .nick-skin {
+  border-color: #0544d5;
 }
 .nick-skin img {
   width: 100%;
@@ -2003,14 +2008,12 @@ body { background: #161c22; color: #eceae6; }
   position: absolute;
   inset: -2px;
   border-radius: 50%;
-  background-image: linear-gradient(90deg, #00c2ff, #33ff8c, #ffc640, #e54cff, #00c2ff);
-  background-size: 220% 100%;
+  background: #0544d5;
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.45s ease;
-  animation: name-aurora-line 2.8s linear infinite;
 }
 .nick-row:has(input#name:focus) .nick-skin::after {
   opacity: 1;
@@ -2079,12 +2082,10 @@ input#name.form__field:placeholder-shown ~ .form__label {
   right: 0;
   bottom: 0;
   height: 3px;
-  background-image: linear-gradient(90deg, #00c2ff, #33ff8c, #ffc640, #e54cff, #00c2ff);
-  background-size: 220% 100%;
+  background: #0544d5;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.45s ease;
-  animation: name-aurora-line 2.8s linear infinite;
 }
 .input-group.form__group:focus-within::after {
   opacity: 1;
@@ -2092,29 +2093,13 @@ input#name.form__field:placeholder-shown ~ .form__label {
 input#name.form__field:focus {
   font-weight: 700;
   box-shadow: none;
-}
-.form__label::after {
-  content: "Name";
-  position: absolute;
-  left: 0;
-  top: 0;
-  color: transparent;
-  background-image: linear-gradient(90deg, #00c2ff, #33ff8c, #ffc640, #e54cff, #00c2ff);
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.45s ease;
-  animation: name-aurora-text 2.8s linear infinite;
+  border-bottom-color: #0544d5;
 }
 input#name.form__field:focus ~ .form__label {
   top: 0;
   font-size: 1rem;
   font-weight: 700;
-}
-input#name.form__field:focus ~ .form__label::after {
-  opacity: 1;
+  color: #0544d5;
 }
 @keyframes name-aurora-line {
   from { background-position: 0 0; }
@@ -2190,9 +2175,9 @@ button.button,
 }
 #play,
 #death-play {
-  background: #f4f1ea;
-  color: #14181c;
-  border: none;
+  background: #ff005b;
+  color: #ffffff;
+  border: 3px solid #cd084f;
   box-shadow: none;
   font-size: 14px;
   font-weight: 700;
@@ -2205,18 +2190,17 @@ button.button,
 #death-play:hover,
 #death-play:focus,
 #death-play:focus-visible {
-  background: #fff;
-  color: #14181c;
-  filter: none;
+  background: #b40040;
+  color: #b5b5b5;
+  border: 3px solid #910437;
   box-shadow: none;
-  border: none;
 }
 
 #spectate,
 #death-spectate {
-  background: transparent;
-  color: rgba(255,255,255,0.72);
-  border: 1px solid rgba(255,255,255,0.28);
+  background: #ffc500;
+  color: white;
+  border: 3px solid #c48f11;
   box-shadow: none;
   font-weight: 600;
 }
@@ -2224,9 +2208,9 @@ button.button,
 #spectate:focus,
 #death-spectate:hover,
 #death-spectate:focus {
-  background: transparent;
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.7);
+    background: #c39802;
+    color: #d8d4d4;
+    border: 3px solid #956d0d;
   box-shadow: none;
 }
 
@@ -2613,8 +2597,6 @@ body.platform-tv .modal-settings-tile:focus-within {
     padding: 0 8px;
   }
   .title { font-size: 28px; letter-spacing: 0.16em; }
-  .aurora-brand { top: 12px; }
-  .aurora-brand__title { font-size: clamp(2.04rem, 8.4vw, 2.88rem); }
   .site-footer {
     left: 8px;
     bottom: calc(90px + 6px);
@@ -2624,79 +2606,6 @@ body.platform-tv .modal-settings-tile:focus-within {
   .death-stats-card { background: none; border: none; border-radius: 0; }
 }
 
-.aurora-brand .aurora {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 2;
-  mix-blend-mode: darken;
-  pointer-events: none;
-}
-.aurora-brand .aurora__item {
-  overflow: hidden;
-  position: absolute;
-  width: 60vw;
-  height: 60vw;
-  background-color: #00c2ff;
-  border-radius: 37% 29% 27% 27% / 28% 25% 41% 37%;
-  filter: blur(1rem);
-  mix-blend-mode: overlay;
-}
-.aurora-brand .aurora__item:nth-of-type(1) {
-  top: -50%;
-  animation: aurora-border 6s ease-in-out infinite, aurora-1 12s ease-in-out infinite alternate;
-}
-.aurora-brand .aurora__item:nth-of-type(2) {
-  background-color: #ffc640;
-  right: 0;
-  top: 0;
-  animation: aurora-border 6s ease-in-out infinite, aurora-2 12s ease-in-out infinite alternate;
-}
-.aurora-brand .aurora__item:nth-of-type(3) {
-  background-color: #33ff8c;
-  left: 0;
-  bottom: 0;
-  animation: aurora-border 6s ease-in-out infinite, aurora-3 8s ease-in-out infinite alternate;
-}
-.aurora-brand .aurora__item:nth-of-type(4) {
-  background-color: #e54cff;
-  right: 0;
-  bottom: -50%;
-  animation: aurora-border 6s ease-in-out infinite, aurora-4 24s ease-in-out infinite alternate;
-}
-@keyframes aurora-1 {
-  0% { top: 0; right: 0; }
-  50% { top: 100%; right: 75%; }
-  75% { top: 100%; right: 25%; }
-  100% { top: 0; right: 0; }
-}
-@keyframes aurora-2 {
-  0% { top: -50%; left: 0%; }
-  60% { top: 100%; left: 75%; }
-  85% { top: 100%; left: 25%; }
-  100% { top: -50%; left: 0%; }
-}
-@keyframes aurora-3 {
-  0% { bottom: 0; left: 0; }
-  40% { bottom: 100%; left: 75%; }
-  65% { bottom: 40%; left: 50%; }
-  100% { bottom: 0; left: 0; }
-}
-@keyframes aurora-4 {
-  0% { bottom: -50%; right: 0; }
-  50% { bottom: 0%; right: 40%; }
-  90% { bottom: 50%; right: 25%; }
-  100% { bottom: -50%; right: 0; }
-}
-@keyframes aurora-border {
-  0% { border-radius: 37% 29% 27% 27% / 28% 25% 41% 37%; }
-  25% { border-radius: 47% 29% 39% 49% / 61% 19% 66% 26%; }
-  50% { border-radius: 57% 23% 47% 72% / 63% 17% 66% 33%; }
-  75% { border-radius: 28% 49% 29% 100% / 93% 20% 64% 25%; }
-  100% { border-radius: 37% 29% 27% 27% / 28% 25% 41% 37%; }
-}
   </style>
 </head>
 <body class="menu-open">
@@ -2767,17 +2676,166 @@ body.platform-tv .modal-settings-tile:focus-within {
       </svg>
     </button>
     <div class="aurora-brand">
-      <div class="online-line"><span class="online-label">online:</span> <span id="online-count">0</span></div>
-      <div class="aurora-brand__title">slither.su
-        <div class="aurora" aria-hidden="true">
-          <div class="aurora__item"></div>
-          <div class="aurora__item"></div>
-          <div class="aurora__item"></div>
-          <div class="aurora__item"></div>
-        </div>
+      <div class="logo-slot" id="logo-slot">
+        <canvas id="logo-canvas" width="1000" height="270"></canvas>
       </div>
-      <p class="aurora-brand__sub">Have a pleasant game!</p>
+      <div id="tips"></div>
     </div>
+    <script>
+    (function () {
+      const view = document.getElementById("logo-canvas");
+      const tips = document.getElementById("tips");
+      const menu = document.getElementById("menu-screen");
+      if (!view || !tips) return;
+      const ctx = view.getContext("2d");
+      const buf = document.createElement("canvas");
+      buf.width = 1000;
+      buf.height = 270;
+      const btx = buf.getContext("2d");
+      const lines = [
+        "Ешьте, чтобы расти!",
+        "Не сталкивайтесь с другими змеями!",
+        "Зажми мышку чтобы быстрее передвигаться!",
+        "Онлайн: 0"
+      ];
+      window.setMenuOnlineCount = function (n) {
+        lines[3] = "Онлайн: " + n;
+        if (tip === 3 && tips) tips.textContent = lines[3];
+      };
+      let tip = 2;
+      let phase = Math.PI;
+      let last = performance.now();
+      let lga = 0;
+      let lgss = 0;
+      let lgfr = 0;
+      const PI2 = Math.PI * 2;
+
+      function stroke(pts, opt) {
+        return {
+          pts: pts,
+          kc: opt.kc || 14,
+          ws: opt.ws != null ? opt.ws : 3.4,
+          wr: opt.wr != null ? opt.wr : 0.012,
+          qm: opt.qm != null ? opt.qm : 0.035,
+          sp: opt.sp || 0.06,
+          sz: opt.sz || 14,
+          r: opt.r || 1,
+          purple: !!opt.purple,
+          mwig: 5
+        };
+      }
+
+      const strokes = [
+        stroke([107, 107, 80, 83, 53, 98, 31, 115, 55, 131, 98, 147, 101, 162, 101, 190, 66, 188, 49, 187, 34, 173], { kc: 22, ws: 4, wr: 0.025, qm: 0.025, sp: 0.06, sz: 11 }),
+        stroke([150, 30, 150, 107, 150, 184], { kc: 66, ws: 4, wr: 0.05, qm: 0.025, sp: 0.06, sz: 11 }),
+        stroke([207, 96, 207, 140, 207, 184], { kc: 46, ws: 4, wr: 0.03, qm: 0.035, sp: 0.06, sz: 11 }),
+        stroke([207, 47, 207, 48.5, 207, 50], { kc: 11, ws: 2, wr: 0.06, qm: 0.05, sp: 0.06, sz: 15, r: 0.5 }),
+        stroke([267, 65, 267, 114.5, 267, 164, 267, 194, 297, 186], { kc: 66, ws: 6, wr: -0.025, qm: -0.0125, sp: 0.06, sz: 11, r: 1.5 }),
+        stroke([243, 94, 268, 94, 293, 94], { kc: 66, ws: 4, wr: 0.015, qm: 0.025, sp: 0.06, sz: 9, r: 1.2 }),
+        stroke([338, 30, 338, 68.5, 338, 107, 338, 145.5, 338, 184, 338, 164, 338, 144, 338, 104, 378, 104, 418, 104, 418, 144, 418, 164, 418, 184], { kc: 46, ws: 4, wr: 0.005, qm: 0.02, sp: 0.06, sz: 11, r: 2.1 }),
+        stroke([535, 175, 500, 201, 472, 175, 442, 138, 472, 105, 502, 84, 532, 105, 546, 118, 544, 139, 504, 139, 464, 139], { kc: 35, ws: 6, wr: -0.013, qm: -0.025, sp: 0.06, sz: 11, r: 1.3 }),
+        stroke([591, 96, 591, 140, 591, 184, 591, 155, 591, 126, 613, 82, 652, 109], { kc: 38, ws: 4, wr: 0.01, qm: -0.035, sp: 0.06, sz: 11 }),
+        stroke([663, 177, 663, 178.5, 663, 180], { kc: 11, ws: 2, wr: 0.06, qm: 0.05, sp: 0.06, sz: 15, purple: true }),
+        stroke([794, 107, 767, 83, 740, 98, 718, 115, 742, 131, 785, 147, 788, 162, 788, 190, 753, 188, 736, 187, 721, 173], { kc: 22, ws: 4, wr: 0.025, qm: 0.025, sp: 0.06, sz: 11, purple: true }),
+        stroke([848, 98, 848, 148, 872, 174, 900, 198, 928, 174, 952, 148, 952, 98], { kc: 36, ws: 4, wr: 0, qm: 0.0274, sp: 0.073, sz: 11, r: 1.5, purple: true })
+      ];
+
+      const green = btx.createLinearGradient(0, 70, 0, 230);
+      green.addColorStop(0, "#f60d54");
+      green.addColorStop(1, "#f60d54");
+      const purple = btx.createLinearGradient(0, 50, 0, 265);
+      purple.addColorStop(0, "#0544d5");
+      purple.addColorStop(1, "#0544d5");
+
+      function frame(now) {
+        const dt = Math.min(50, now - last);
+        last = now;
+        const shown = !menu || menu.classList.contains("is-open");
+        if (!shown) {
+          requestAnimationFrame(frame);
+          return;
+        }
+        const et = dt / 25;
+        phase += dt * 0.00068;
+        if (phase >= PI2) {
+          phase -= PI2;
+          tip = (tip + 1) % lines.length;
+          tips.textContent = lines[tip];
+        }
+        tips.style.opacity = Math.sqrt(Math.max(0, 0.5 - 0.5 * Math.cos(phase))).toFixed(5);
+        if (lga < 1) lga = Math.min(1, lga + 0.05 * et);
+        if (lgss < 1) lgss = Math.min(1, lgss + 0.00375 * et);
+        lgfr += et;
+        btx.clearRect(0, 0, 1000, 270);
+        for (let i = 0; i < strokes.length; i++) {
+          const o = strokes[i];
+          if (o.mwig !== 0) {
+            o.mwig = Math.max(0, o.mwig * Math.pow(0.982, et) - 0.001 * et);
+          }
+          const pts = o.pts;
+          const mwig = o.mwig;
+          btx.fillStyle = o.purple ? purple : green;
+          let ax2 = pts[0];
+          let ay2 = pts[1];
+          let lpax = ax2;
+          let lpay = ay2;
+          let ang = 0;
+          let hasAng = false;
+          let wig = o.ws;
+          let wgang = lgfr * o.sp;
+          let q = 0;
+          for (let j = 2; j < pts.length; j += 4) {
+            const ax1 = ax2;
+            const ay1 = ay2;
+            const cx = pts[j];
+            const cy = pts[j + 1];
+            ax2 = pts[j + 2];
+            ay2 = pts[j + 3];
+            for (let k = 1; k <= o.kc; k++) {
+              q++;
+              const s = k / o.kc;
+              const ix1 = ax1 + (cx - ax1) * s;
+              const iy1 = ay1 + (cy - ay1) * s;
+              const ix2 = cx + (ax2 - cx) * s;
+              const iy2 = cy + (ay2 - cy) * s;
+              let x = ix1 + (ix2 - ix1) * s;
+              let y = iy1 + (iy2 - iy1) * s;
+              let wang = Math.atan2(y - lpay, x - lpax);
+              if (!hasAng) {
+                hasAng = true;
+                ang = wang;
+              } else {
+                if (wang - ang > Math.PI) wang -= PI2;
+                else if (wang - ang < -Math.PI) wang += PI2;
+                ang += (wang - ang) * 0.05;
+              }
+              lpax = x;
+              lpay = y;
+              const off = Math.sin(wgang) * wig * mwig;
+              x += Math.cos(Math.PI / 2 + ang) * off;
+              y += Math.sin(Math.PI / 2 + ang) * off;
+              wgang -= 0.76 * o.qm * wig;
+              wig += o.wr;
+              const fsz = o.sz * 1.15 * Math.min(1, (0.2 + 0.8 * lga) * (30 * lgss * o.r - q / 20 - i / 2));
+              if (fsz > 0.5) {
+                btx.beginPath();
+                btx.arc(x, y, fsz, 0, PI2);
+                btx.fill();
+              }
+            }
+          }
+        }
+        ctx.clearRect(0, 0, 1000, 270);
+        ctx.shadowColor = "#000000";
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetY = 7;
+        ctx.drawImage(buf, 0, 0);
+        requestAnimationFrame(frame);
+      }
+
+      requestAnimationFrame(frame);
+    })();
+    </script>
     <div id="user-interface" class="main-container">
     <div class="nick-row">
       <button type="button" id="skins" class="nick-skin" aria-label="Скины">
@@ -2790,7 +2848,7 @@ body.platform-tv .modal-settings-tile:focus-within {
     </div>
     <div class="primary-buttons">
       <button type="button" id="play" class="button"><span class="material-symbols-outlined btn-ico" aria-hidden="true">sports_esports</span><span class="btn-label">Играть</span></button>
-      <button type="button" id="spectate" class="button"><span class="material-symbols-outlined btn-ico" aria-hidden="true">visibility</span><span class="btn-label">Смотреть</span></button>
+      <button type="button" id="spectate" class="button"><span class="material-symbols-outlined btn-ico" aria-hidden="true">visibility</span><span class="btn-label">Наблюдать</span></button>
     </div>
     </div>
 
@@ -8831,14 +8889,12 @@ class UserInterface {
     }
 
     async refreshOnlineCount() {
-        const el = document.getElementById("online-count");
-        if (!el) return;
         try {
             const res = await fetch(`https://${SERVER_HOST}/process`, { cache: "no-store" });
             if (!res.ok) return;
             const data = await res.json();
             const n = (Number(data.playing) || 0) + (Number(data.no_playing) || 0);
-            el.textContent = String(n);
+            if (typeof window.setMenuOnlineCount === "function") window.setMenuOnlineCount(n);
         } catch (_) {}
     }
 
