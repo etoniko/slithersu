@@ -2050,6 +2050,68 @@ body { background: #161c22; color: #eceae6; }
   opacity: 1;
 }
 
+.skin-stage {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  align-items: center;
+  column-gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin: 2px 0 0;
+}
+.skin-arrow {
+  width: 34px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+}
+.skin-arrow:hover { color: rgba(255, 255, 255, 0.7); }
+.skin-preview {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 104px;
+  display: block;
+}
+.skin-colors {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: center;
+  margin: 2px 4px 8px;
+}
+.skin-colors button {
+  flex: 1 1 0;
+  width: auto;
+  max-width: 16px;
+  aspect-ratio: 1;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.skin-save {
+  display: block;
+  margin: 0 auto 10px;
+  padding: 5px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #2ea876;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.skin-save:hover { background: #36c48a; }
+
 .title {
   font-size: 44px;
   font-weight: 700;
@@ -2905,10 +2967,13 @@ body.platform-tv .modal-settings-tile:focus-within {
     })();
     </script>
     <div id="user-interface" class="main-container">
+    <div class="skin-stage">
+      <button type="button" id="skin-prev" class="skin-arrow" aria-label="Предыдущий скин">‹</button>
+      <canvas id="skin-preview" width="320" height="140"></canvas>
+      <button type="button" id="skin-next" class="skin-arrow" aria-label="Следующий скин">›</button>
+    </div>
+    <div id="skin-colors" class="skin-colors"></div>
     <div class="nick-row">
-      <button type="button" id="skins" class="nick-skin" aria-label="Скины">
-        <img id="nick-skin-img" src="./4tui4GP.png" alt="" width="52" height="52" />
-      </button>
       <div class="input-group form__group">
         <input type="text" class="form__field" id="name" placeholder="Name" name="name" maxlength="24" autocomplete="off" />
         <label for="name" class="form__label">Name</label>
@@ -5119,6 +5184,335 @@ class TvControls {
 }
 
 
+/* Спрайты сегмента 1:1 с клиентом slither.io: 7 полос, боковой свет, тень, свечение буста. */
+const SlitherGfx = (() => {
+    const RRS = [192,144,128,128,238,255,255,255,224,255,144,80,255,40,100,120,72,160,255,56,56,78,255,101,128,60,0,217,255,144,32,240,240,240,240,32,40,104,0,104,0,128];
+    const GGS = [128,153,208,255,238,160,144,64,48,255,153,80,192,136,117,134,84,80,224,68,68,35,86,200,132,192,255,69,64,144,32,32,240,144,32,240,60,128,0,40,0,128];
+    const BBS = [255,255,208,128,112,96,144,64,224,255,255,80,80,96,255,255,255,255,64,255,255,192,9,232,144,72,83,69,64,144,32,32,240,32,240,32,173,255,112,170,0,255];
+    let pack = null;
+
+    function ellipse(xx, yy, ksz2) {
+        let v2 = Math.hypot(0.5 * (xx - ksz2), yy - ksz2) / ksz2;
+        v2 = v2 * v2;
+        return v2 > 1 ? 1 : v2;
+    }
+
+    function shade(i, j, jk, xx, yy, ksz) {
+        const ksz2 = ksz / 2;
+        let rr = RRS[i], gg = GGS[i], bb = BBS[i];
+        const v2r = Math.max(0, Math.min(1, 1 - Math.hypot(xx - ksz2, yy - ksz2) / 34));
+        let v = Math.pow(Math.max(0, Math.min(1, 1 - Math.abs(yy - ksz2) / ksz2)), 0.35);
+        v += (v2r - v) * 0.375;
+        let done = false;
+        if (i === 24) {
+            let v2 = Math.hypot(0.5 * (xx - ksz2), yy - ksz2) / ksz2;
+            v2 = Math.pow(v2 * 1.05, 4);
+            if (v2 > 1) v2 = 1;
+            rr += (255 * 1.2 - rr) * v2;
+            gg += (192 * 1.2 - gg) * v2;
+            bb += (64 * 1.2 - bb) * v2;
+            v *= 1.22 - 0.44 * j / (jk - 1);
+            done = true;
+        } else if (i === 26 || i === 27) {
+            const v2 = ellipse(xx, yy, ksz2);
+            v *= 1.22 - 0.44 * j / (jk - 1);
+            rr *= v; gg *= v; bb *= v;
+            v = 1;
+            const tr = i === 26 ? 128 * 1.1 : 217 * 1.1;
+            const tg = i === 26 ? 255 * 1.1 : 69 * 1.1;
+            const tb = i === 26 ? 136 * 1.1 : 69 * 1.1;
+            rr += (tr - rr) * v2;
+            gg += (tg - gg) * v2;
+            bb += (tb - bb) * v2;
+            done = true;
+        } else if (i === 28) {
+            const v2 = 0.5 - 0.5 * Math.cos(Math.PI * j / jk);
+            rr += (128 - rr) * v2;
+            gg += (128 - gg) * v2;
+            bb += (255 - bb) * v2;
+            v *= 1.1;
+            if (v > 1) v = 1;
+            done = true;
+        } else if (i === 29) {
+            const v2 = ellipse(xx, yy, ksz2);
+            v *= 1.44 - 0.88 * j / (jk - 1);
+            rr = v * 32; gg = v * 32; bb = v * 32;
+            v = 1;
+            rr += (255 - rr) * v2;
+            gg += (255 - gg) * v2;
+            bb += (255 - bb) * v2;
+            done = true;
+        } else if (i >= 30 && i <= 35 || i === 41) {
+            const v2 = ellipse(xx, yy, ksz2);
+            const t = (0.1 + 0.9 * j / jk) % 1;
+            if (i === 30) { rr = t * 80; gg = t * 80; bb = 128 + t * 160; rr += (255 - rr) * 0.3 * v2; gg += (255 - gg) * 0.3 * v2; bb += (255 * 1.4 - bb) * 0.3 * v2; }
+            else if (i === 31) { rr = 128 + t * 160; gg = t * 80; bb = t * 80; rr += (255 * 1.4 - rr) * 0.3 * v2; gg += (255 - gg) * 0.3 * v2; bb += (255 - bb) * 0.3 * v2; }
+            else if (i === 32) { rr = 96 + t * 128; gg = 96 + t * 128; bb = t * 80; rr += (255 * 1.2 - rr) * 0.6 * v2; gg += (255 * 1.2 - gg) * 0.6 * v2; bb += (255 - bb) * 0.6 * v2; }
+            else if (i === 33) { rr = 96 + t * 128; gg = 48 + t * 80; bb = t * 48; rr += (255 * 1.2 - rr) * 0.6 * v2; gg += (255 * 1.1 - gg) * 0.6 * v2; bb += (255 - bb) * 0.6 * v2; }
+            else if (i === 34) { rr = 96 + t * 128; gg = t * 80; bb = 96 + t * 128; rr += (255 * 1.2 - rr) * 0.6 * v2; gg += (255 - gg) * 0.6 * v2; bb += (255 * 1.2 - bb) * 0.6 * v2; }
+            else if (i === 35) { rr = t * 80; gg = 96 + t * 128; bb = t * 80; rr += (255 - rr) * 0.6 * v2; gg += (255 * 1.2 - gg) * 0.6 * v2; bb += (255 - bb) * 0.6 * v2; }
+            else { rr = t * 240; gg = t * 255; bb = 160 + t * 255; rr += (255 - rr) * 0.3 * v2; gg += (255 - gg) * 0.3 * v2; bb += (255 * 1.4 - bb) * 0.3 * v2; }
+            v = 1;
+            done = true;
+        } else if (i === 36) {
+            let v3 = (j / jk + 0.6 + 0.25 * (xx / ksz)) % 1;
+            const band = (yyShift, gain, tr, tg, tb) => {
+                let v2 = (yy + yyShift - ksz2) / ksz;
+                v2 = 1.3 * (v2 - 1.3 * (v3 - 0.5));
+                v2 = Math.abs(v2 * 2) * gain;
+                if (v2 < 1) {
+                    rr += (tr - rr) * (1 - v2);
+                    gg += (tg - gg) * (1 - v2);
+                    bb += (tb - bb) * (1 - v2);
+                }
+            };
+            band(0, 2.4, 255 * 2.2, 255 * 2.2, 255 * 2.2);
+            band(v3 < 0.5 ? -ksz2 * 0.055 : ksz2 * 0.055, 4.8, 255, 32, 64);
+            let v2 = (ksz2 - yy) / ksz;
+            v2 = 1.3 * (v2 - 1.3 * (v3 - 0.5));
+            v2 = Math.abs(v2 * 2) * 2.4;
+            if (v2 < 1) { rr += (255 * 2.2 - rr) * (1 - v2); gg += (255 * 2.2 - gg) * (1 - v2); bb += (255 * 2.2 - bb) * (1 - v2); }
+            v2 = (v3 < 0.5 ? ksz2 + ksz2 * 0.055 - yy : ksz2 - ksz2 * 0.055 - yy) / ksz;
+            v2 = 1.3 * (v2 - 1.3 * (v3 - 0.5));
+            v2 = Math.abs(v2 * 2) * 4.8;
+            if (v2 < 1) { rr += (255 - rr) * (1 - v2); gg += (32 - gg) * (1 - v2); bb += (64 - bb) * (1 - v2); }
+            v2 = (yy - ksz2) / ksz;
+            if (v3 >= 0.47 && v3 <= 0.53) { rr = 255; gg = 32; bb = 64; }
+            else if (v2 >= -0.1 && v2 <= 0.1) {
+                let u = Math.abs(0.5 - v3);
+                u = 1 - Math.pow(u / 0.5, 2);
+                rr += (255 - rr) * u; gg += (32 - gg) * u; bb += (64 - bb) * u;
+            } else if ((v3 >= 0.44 && v3 <= 0.56) || (v2 >= -0.15 && v2 <= 0.15)) {
+                let u = Math.abs(0.5 - v3);
+                u = 1 - Math.pow(u / 0.5, 2);
+                rr += (255 - rr) * u; gg += (255 - gg) * u; bb += (255 - bb) * u;
+            }
+            v = Math.pow(Math.max(0, Math.min(1, 1 - Math.abs(yy - ksz2) / ksz2)), 0.35);
+            const vMix = Math.pow(Math.max(0, Math.min(1, 1 - Math.abs(yy - ksz2) / ksz2)), 0.5);
+            rr += (RRS[i] - rr) * (1 - vMix);
+            gg += (GGS[i] - gg) * (1 - vMix);
+            bb += (BBS[i] - bb) * (1 - vMix);
+            done = true;
+        }
+        if (!done) {
+            const dx = (xx - ksz2) / ksz2;
+            const dy = (yy - ksz2) / ksz2;
+            v = 1.08 - 0.2 * (dx * dx + dy * dy);
+            if (v > 1.08) v = 1.08;
+            if (v < 0.9) v = 0.9;
+        }
+        return [
+            Math.max(0, Math.min(255, rr * v)) | 0,
+            Math.max(0, Math.min(255, gg * v)) | 0,
+            Math.max(0, Math.min(255, bb * v)) | 0
+        ];
+    }
+
+    function stars(ctx, ksz, i) {
+        if (i !== 10 && i !== 19 && i !== 20) return;
+        const ksz2 = ksz / 2;
+        const unit = 1.5;
+        let fk, tk, div, a, b, alpha = 1;
+        if (i === 10) { fk = -1; tk = 1; div = 8; a = 24; b = 62; }
+        else if (i === 19) { fk = -2; tk = 2; div = 15; a = 12; b = 31; alpha = 0.7; }
+        else { fk = -1.5; tk = 1.5; div = 15; a = 14; b = 36; alpha = 0.7; }
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = "#ffffff";
+        for (let k = fk; k <= tk + 1e-6; k++) {
+            const tx = ksz2 + Math.cos(2 * Math.PI * k / div) * (ksz2 / 16) * 13;
+            const ty = ksz2 + Math.sin(2 * Math.PI * k / div) * (ksz2 / 16) * 13;
+            ctx.beginPath();
+            for (let m = 0; m <= 5; m++) {
+                const x1 = tx + Math.cos(2 * Math.PI * m / 5) * a * 0.05 * unit;
+                const y1 = ty + Math.sin(2 * Math.PI * m / 5) * a * 0.05 * unit;
+                const x2 = tx + Math.cos(2 * Math.PI * (m + 0.5) / 5) * b * 0.05 * unit;
+                const y2 = ty + Math.sin(2 * Math.PI * (m + 0.5) / 5) * b * 0.05 * unit;
+                if (m === 0) ctx.moveTo(x1, y1);
+                else ctx.lineTo(x1, y1);
+                ctx.lineTo(x2, y2);
+            }
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function build() {
+        const ksz = 48;
+        const colors = [];
+        for (let i = 0; i < RRS.length; i++) {
+            const jk = i === 36 ? 60 : 7;
+            const kmcs = [];
+            for (let j = 0; j < jk; j++) {
+                const c = document.createElement("canvas");
+                c.width = c.height = ksz;
+                const ctx = c.getContext("2d");
+                ctx.beginPath();
+                ctx.arc(24, 24, 24, 0, Math.PI * 2);
+                ctx.fill();
+                const img = ctx.getImageData(0, 0, ksz, ksz);
+                const d = img.data;
+                for (let yy = 0, p = 0; yy < ksz; yy++) {
+                    for (let xx = 0; xx < ksz; xx++, p += 4) {
+                        const rgb = shade(i, j, jk, xx, yy, ksz);
+                        d[p] = rgb[0];
+                        d[p + 1] = rgb[1];
+                        d[p + 2] = rgb[2];
+                    }
+                }
+                ctx.putImageData(img, 0, 0);
+                stars(ctx, ksz, i);
+                kmcs.push(c);
+            }
+            const glow = document.createElement("canvas");
+            glow.width = glow.height = 62;
+            const gctx = glow.getContext("2d");
+            const gimg = gctx.createImageData(62, 62);
+            const gd = gimg.data;
+            for (let yy = 0, p = 0; yy < 62; yy++) {
+                for (let xx = 0; xx < 62; xx++, p += 4) {
+                    let gv = 1 - Math.hypot(31 - xx, 31 - yy) / 32;
+                    if (gv < 0) gv = 0;
+                    else gv = 0.5 * (1 - Math.cos(Math.PI * gv));
+                    gd[p] = RRS[i];
+                    gd[p + 1] = GGS[i];
+                    gd[p + 2] = BBS[i];
+                    gd[p + 3] = (255 * gv) | 0;
+                }
+            }
+            gctx.putImageData(gimg, 0, 0);
+            colors.push({ kmcs, kl: kmcs.length, klp: i !== 36, kfmc: glow, rr: RRS[i], gg: GGS[i], bb: BBS[i] });
+        }
+        const shadow = document.createElement("canvas");
+        shadow.width = shadow.height = 62;
+        const sctx = shadow.getContext("2d");
+        const simg = sctx.createImageData(62, 62);
+        const sd = simg.data;
+        for (let yy = 0, p = 0; yy < 62; yy++) {
+            for (let xx = 0; xx < 62; xx++, p += 4) {
+                let sv = Math.hypot(31 - xx, 31 + 3 - yy) - 15;
+                sv *= 0.1;
+                if (sv < 0) sv = -sv;
+                if (sv > 1) sv = 1;
+                sv = (1 - sv) * 0.25;
+                sd[p + 3] = (255 * sv) | 0;
+            }
+        }
+        sctx.putImageData(simg, 0, 0);
+        const ring = document.createElement("canvas");
+        ring.width = ring.height = 52;
+        const rctx = ring.getContext("2d");
+        const rimg = rctx.createImageData(52, 52);
+        const rd = rimg.data;
+        for (let yy = 0, p = 0; yy < 52; yy++) {
+            for (let xx = 0; xx < 52; xx++, p += 4) {
+                let rv = Math.abs(Math.hypot(26 - xx, 26 - yy) - 16);
+                rv = rv <= 4 ? (1 - rv / 4) * 0.8 : 0;
+                rd[p + 3] = (255 * rv) | 0;
+            }
+        }
+        rctx.putImageData(rimg, 0, 0);
+        return { colors, shadow, ring };
+    }
+
+    function nearest(rgb) {
+        const r = (rgb >> 16) & 255, g = (rgb >> 8) & 255, b = rgb & 255;
+        let best = 0, bestD = 1e9;
+        for (let i = 0; i < RRS.length; i++) {
+            const dr = r - RRS[i], dg = g - GGS[i], db = b - BBS[i];
+            const d = dr * dr + dg * dg + db * db;
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+    }
+
+    function expand(list, times) {
+        const out = [];
+        for (let i = 0; i < list.length; i++) {
+            for (let n = 0; n < times; n++) out.push(list[i]);
+        }
+        return out;
+    }
+    // Повторы цветов, как rbcs в оригинале: каждый индекс — один штамп шара.
+    const patterns = [
+        expand([7, 5, 4, 3, 2, 0, 8, 9, 19, 6], 6),
+        expand([4, 19], 16),
+        expand([0, 5], 14),
+        expand([9, 8], 14),
+        expand([7, 9], 12),
+        expand([3, 4], 14)
+    ];
+
+    return {
+        count: RRS.length,
+        patterns,
+        rgb(i) {
+            const c = i >= RRS.length ? patterns[i - RRS.length] : null;
+            const k = c ? c[0] : i;
+            return [RRS[k] || 0, GGS[k] || 0, BBS[k] || 0];
+        },
+        pattern(i) { return i >= RRS.length ? patterns[i - RRS.length] || null : null; },
+        get() { if (!pack) pack = build(); return pack; },
+        nearest
+    };
+})();
+
+/** Готовые узоры slither.io: номер скина → цепочка цветов, которая повторяется вдоль тела. */
+const SLITHER_PRESETS = {
+    9: [7,9,7,9,7,9,7,9,7,9,7,10,10,10,10,10,10,10,10,10],
+    10: [9,9,9,9,9,1,1,1,1,1,7,7,7,7,7],
+    11: [11,11,11,11,11,7,7,7,7,7,12,12,12,12,12],
+    12: [7,7,7,7,7,9,9,9,9,9,13,13,13,13,13],
+    13: [14,14,14,14,14,9,9,9,9,9,7,7,7,7,7],
+    14: [9,9,9,9,9,9,9,7,7,7,7,7,7,7],
+    15: [0,1,2,3,4,5,6,7,8],
+    16: [15,15,15,15,15,15,15,4,4,4,4,4,4,4],
+    17: [9,9,9,9,9,9,9,16,16,16,16,16,16,16],
+    18: [7,7,7,7,7,7,7,9,9,9,9,9,9,9],
+    19: [9],
+    20: [3,3,3,3,3,0,0,0,0,0],
+    21: [3,3,3,3,3,3,3,18,18,18,18,18,18,20,19,20,19,20,19,20,18,18,18,18,18,18],
+    22: [5,5,5,5,5,5,5,9,9,9,9,9,9,9,13,13,13,13,13,13,13],
+    23: [16,16,16,16,16,16,16,18,18,18,18,18,18,18,7,7,7,7,7,7,7],
+    24: [23,23,23,23,23,23,23,23,23,18,18,18,18,18,18,18,18,18],
+    25: [21,21,21,21,21,21,21,21,21,21,21,21,22,22,22,22,22,22,22,22,22],
+    26: [24], 27: [25],
+    28: [18,18,18,18,18,18,18,25,25,25,25,25,25,25,7,7,7,7,7,7,7],
+    29: [11,11,4,11,11,11,11,4,11,11],
+    30: [10,10,19,20,10,10,20,19],
+    31: [10,10], 32: [20,20], 33: [12,11,11],
+    34: [7,7,9,13,13,9,16,16,9,12,12,9,7,7,9,16,16,9],
+    35: [7,7,9,9,6,6,9,9],
+    36: [16,16,9,9,15,15,9,9],
+    37: [22], 38: [18], 39: [23], 40: [26], 41: [27],
+    42: [2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,5,5,5,5,5,5,5,5,7,7,7,7,7,7,7,7],
+    43: [28], 44: [29],
+    45: [7,7,7,9,9,9,9,9,9,9,9,7,7,7],
+    46: [7],
+    47: [16,16,16,18,18,18,18,18,18,18,18,18,7,7,7,7,7,7,7,7,16,16,16,16],
+    48: [7],
+    49: [23,23,23,23,23,9,9,9,9,9,9,9,9,23,23],
+    50: [18,18,18,18,18,18,18,18,18,18,18,18,18,18,16,16,16,16,16,16,16,16,7,7,7,7,7,7,7,7],
+    51: [7,7,7,9,9,16,16,16,16,16,16,9,9],
+    52: [7,7,7,7,18,18,18,18,18,18,18,18,18,7,7,7,7,7],
+    53: [30], 54: [31], 55: [32], 56: [33], 57: [34], 58: [35], 59: [18],
+    60: [36],
+    61: [30,30,30,30,30,30,35,35,35,35,35,35,33,33,33,33,33,33,31,31,31,31,31,31,32,32,32,32,32,32,34,34,34,34,34,34],
+    62: [17,17,17,17,17,39,39,39,39,39],
+    63: [7,7,7,11,11,11],
+    64: [16,16,11,11],
+    65: [4,4,4,4,9,9,9,9]
+};
+function slitherPreset(cv) {
+    const row = SLITHER_PRESETS[cv | 0];
+    return row && row.length ? row : null;
+}
+try {
+    const savedSkin = JSON.parse(localStorage.getItem("slitherCustom") || "null");
+    if (Array.isArray(savedSkin) && savedSkin.length) window.__slitherCustom = savedSkin;
+} catch (e) {}
+
+
 /* --- js/game/Cell.js --- */
 /** Спрайты как в slither.io: 7 яркостей сегмента и мягкое свечение еды. */
 const SlitherLook = (() => {
@@ -5148,10 +5542,9 @@ const SlitherLook = (() => {
         coreC.width = coreC.height = sz;
         const cctx = coreC.getContext("2d");
         const orb = cctx.createRadialGradient(mid, mid, 0, mid, mid, mid);
-        orb.addColorStop(0, `rgba(${Math.min(255, r + 80)},${Math.min(255, g + 80)},${Math.min(255, b + 80)},1)`);
-        orb.addColorStop(0.45, `rgba(${r},${g},${b},1)`);
-        orb.addColorStop(0.82, `rgba(${Math.max(0, r * 0.55)},${Math.max(0, g * 0.55)},${Math.max(0, b * 0.55)},1)`);
-        orb.addColorStop(1, `rgba(${Math.max(0, r * 0.25)},${Math.max(0, g * 0.25)},${Math.max(0, b * 0.25)},0)`);
+        orb.addColorStop(0, `rgba(${r},${g},${b},1)`);
+        orb.addColorStop(0.78, `rgba(${r},${g},${b},1)`);
+        orb.addColorStop(1, `rgba(${r},${g},${b},0)`);
         cctx.fillStyle = orb;
         cctx.fillRect(0, 0, sz, sz);
 
@@ -5161,8 +5554,8 @@ const SlitherLook = (() => {
         edgeC.width = edgeC.height = esz;
         const ectx = edgeC.getContext("2d");
         const edge = ectx.createRadialGradient(emid, emid, 0, emid, emid, emid);
-        edge.addColorStop(0, `rgba(${Math.min(255, r + 80)},${Math.min(255, g + 80)},${Math.min(255, b + 80)},1)`);
-        edge.addColorStop(0.45, `rgba(${r},${g},${b},1)`);
+        edge.addColorStop(0, `rgba(${r},${g},${b},1)`);
+        edge.addColorStop(0.58, `rgba(${r},${g},${b},1)`);
         edge.addColorStop(0.82, `rgba(${Math.max(0, r * 0.55)},${Math.max(0, g * 0.55)},${Math.max(0, b * 0.55)},1)`);
         edge.addColorStop(1, `rgba(${Math.max(0, r * 0.25)},${Math.max(0, g * 0.25)},${Math.max(0, b * 0.25)},0)`);
         ectx.fillStyle = edge;
@@ -5208,7 +5601,53 @@ const SlitherLook = (() => {
         ctx.drawImage(canvas, x - rad, y - rad, rad * 2, rad * 2);
     }
 
-    return { nearest, blit, shadow };
+    const pupilEdge = document.createElement("canvas");
+    pupilEdge.width = pupilEdge.height = 28;
+    {
+        const pctx = pupilEdge.getContext("2d");
+        const g = pctx.createRadialGradient(14, 14, 0, 14, 14, 14);
+        g.addColorStop(0, "rgba(0,0,0,1)");
+        g.addColorStop(0.82, "rgba(0,0,0,1)");
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        pctx.fillStyle = g;
+        pctx.fillRect(0, 0, 28, 28);
+    }
+    const pupilCore = document.createElement("canvas");
+    pupilCore.width = pupilCore.height = 48;
+    {
+        const pctx = pupilCore.getContext("2d");
+        const g = pctx.createRadialGradient(24, 24, 0, 24, 24, 24);
+        g.addColorStop(0, "rgba(0,0,0,1)");
+        g.addColorStop(0.82, "rgba(0,0,0,1)");
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        pctx.fillStyle = g;
+        pctx.fillRect(0, 0, 48, 48);
+    }
+
+    const eyeEdge = document.createElement("canvas");
+    eyeEdge.width = eyeEdge.height = 28;
+    {
+        const pctx = eyeEdge.getContext("2d");
+        const g = pctx.createRadialGradient(14, 14, 0, 14, 14, 14);
+        g.addColorStop(0, "rgba(255,255,255,1)");
+        g.addColorStop(0.82, "rgba(255,255,255,1)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        pctx.fillStyle = g;
+        pctx.fillRect(0, 0, 28, 28);
+    }
+    const eyeCore = document.createElement("canvas");
+    eyeCore.width = eyeCore.height = 48;
+    {
+        const pctx = eyeCore.getContext("2d");
+        const g = pctx.createRadialGradient(24, 24, 0, 24, 24, 24);
+        g.addColorStop(0, "rgba(255,255,255,1)");
+        g.addColorStop(0.82, "rgba(255,255,255,1)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        pctx.fillStyle = g;
+        pctx.fillRect(0, 0, 48, 48);
+    }
+
+    return { nearest, blit, shadow, pupilEdge, pupilCore, eyeEdge, eyeCore };
 })();
 
 class Cell {
@@ -5292,14 +5731,6 @@ class Cell {
         this._showName = false;
         this._hideSpeedEdge();
 
-        const foodMax = this.core?.net?.foodMaxSize || 12;
-        this._foodVisualCap = foodMax * 1.55 + 2;
-
-        if (this.r > this._foodVisualCap) {
-            this.r = this.or = this.nr = this._foodVisualCap;
-            this._lastScale = this.r / 256;
-        }
-
         this._foodSimple = null;
         this._updateFoodLod(true);
     }
@@ -5329,6 +5760,7 @@ class Cell {
             this._segmentZ = z;
             this._lastZIndex = z;
         }
+        this.isHead = this.serverHead === true;
         if (prevIndex !== segmentIndex) {
             this.syncLabelVisibility();
         }
@@ -5341,11 +5773,13 @@ class Cell {
         if (ownerId && this.playerId === ownerId && mainId != null) {
             return this.id === mainId;
         }
-        return this.segmentIndex <= 0;
+        return this.serverHead === true;
     }
 
     shouldShowNameAndMass() {
         if (this.isFood) return false;
+        const ownerId = this.core?.net?.ownerPlayerId ?? 0;
+        if (ownerId && this.playerId === ownerId) return false;
         return this.isPrimaryDisplayCell();
     }
 
@@ -5622,14 +6056,6 @@ class Cell {
         if (alpha < 1) ctx.globalAlpha = alpha;
 
         if (this.isFood) {
-            if (this.isDeathFood) {
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
-                ctx.fillStyle = "#808080";
-                ctx.fill();
-                ctx.restore();
-                return;
-            }
             const colorKey = this._colorNum >>> 0;
             if (this._lookKey !== colorKey) {
                 this._lookKey = colorKey;
@@ -5639,9 +6065,9 @@ class Cell {
             let y = this.y;
             let gx = this.x;
             let gy = this.y;
-            let scale = (this._foodVis || 1) * 1.5;
+            let scale = this.isDeathFood ? 1 : (this._foodVis || 1) * 1.5;
             let glowPulse = 1;
-            {
+            if (!this.isDeathFood) {
                 const t = performance.now() * 0.00135;
                 const phase = (this.id % 997) * 0.01;
                 const amp = r * 1.45;
@@ -5654,18 +6080,20 @@ class Cell {
             }
             const coreR = r * scale;
             ctx.imageSmoothingEnabled = true;
-            if (!this.isDeathFood) {
-                ctx.globalAlpha = alpha * 0.35;
-                SlitherLook.blit(ctx, SlitherLook.shadow, x + coreR * 0.15, y + coreR * 0.28, coreR * 1.35);
-                const glowA = Math.max(0.4, Math.min(0.85, 1.2 - coreR * 0.03));
-                ctx.globalAlpha = alpha * glowA * (0.05 + 0.95 * glowPulse);
-                SlitherLook.blit(ctx, this._look.glow, gx, gy, coreR * (coreR < 10 ? 24 : 18));
-                ctx.globalAlpha = alpha;
-            }
-            ctx.imageSmoothingEnabled = false;
-            SlitherLook.blit(ctx, this._look.edge, x, y, coreR);
+            ctx.globalAlpha = alpha * 0.35;
+            SlitherLook.blit(ctx, SlitherLook.shadow, x + coreR * 0.15, y + coreR * 0.28, coreR * 1.35);
+            const glowA = Math.max(0.4, Math.min(0.85, 1.2 - coreR * 0.03));
+            ctx.globalAlpha = alpha * glowA * (0.05 + 0.95 * glowPulse);
+            SlitherLook.blit(ctx, this._look.glow, gx, gy, coreR * (coreR < 10 ? 24 : 18));
+            ctx.globalAlpha = alpha;
             ctx.imageSmoothingEnabled = true;
-            SlitherLook.blit(ctx, this._look.core, x, y, coreR * 0.93);
+            SlitherLook.blit(ctx, this._look.edge, x, y, coreR);
+            ctx.restore();
+            return;
+        }
+
+        // Тело, глаза и имя рисует drawSlitherSnakes: голова отдельно от сегментов.
+        if (this.playerId) {
             ctx.restore();
             return;
         }
@@ -5777,7 +6205,7 @@ class Cell {
         this._hideSpeedEdge();
         this._showName = false;
 
-        if (opts && opts.instant) {
+        if ((opts && opts.instant) || this.playerId) {
             this._finishDestroy();
             return;
         }
@@ -6414,6 +6842,355 @@ class Application {
         ctx.restore();
     }
 
+    _mouseWorld() {
+        const ui = this.core && this.core.ui;
+        const view = this.view;
+        if (!ui || !view) return null;
+        const rect = view.getBoundingClientRect();
+        const cssW = this._viewCssW || rect.width || 1;
+        const cssH = this._viewCssH || rect.height || 1;
+        const s = this.camera.s || 1;
+        const sx = ui.mouse.x - rect.left;
+        const sy = ui.mouse.y - rect.top;
+        return {
+            x: (sx - cssW / 2) / s + this.camera.x,
+            y: (sy - cssH / 2) / s + this.camera.y
+        };
+    }
+
+    drawSlitherSnakes(ctx, snakeList, now) {
+        if (!snakeList.length) return;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "low";
+        const gfx = SlitherGfx.get();
+        const groups = this._snakeGroups || (this._snakeGroups = new Map());
+        const listPool = this._snakeListPool || (this._snakeListPool = []);
+        for (const old of groups.values()) {
+            old.length = 0;
+            listPool.push(old);
+        }
+        groups.clear();
+        for (let i = 0; i < snakeList.length; i++) {
+            const cell = snakeList[i];
+            if (!cell || !cell.playerId) continue;
+            let list = groups.get(cell.playerId);
+            if (!list) {
+                list = listPool.length ? listPool.pop() : [];
+                groups.set(cell.playerId, list);
+            }
+            list.push(cell);
+        }
+        const mouse = this._mouseWorld();
+        const ownerId = this.core.net && this.core.net.ownerPlayerId;
+        const camS = this.camera.s || 1;
+        const pi2 = Math.PI * 2;
+        const snakes = this._snakeOrder || (this._snakeOrder = []);
+        snakes.length = 0;
+        for (const list of groups.values()) {
+            list.sort((a, b) => ((a.bodyIndex != null ? a.bodyIndex : a.id) - (b.bodyIndex != null ? b.bodyIndex : b.id)) || (a.id - b.id));
+            if (!list.length) continue;
+            let run = [list[0]];
+            for (let i = 1; i < list.length; i++) {
+                const prev = list[i - 1];
+                const next = list[i];
+                const limit = Math.max(prev.r || 0, next.r || 0) * 3;
+                if (Math.hypot(next.x - prev.x, next.y - prev.y) > limit) {
+                    snakes.push(run);
+                    run = [next];
+                } else {
+                    run.push(next);
+                }
+            }
+            snakes.push(run);
+        }
+        snakes.sort((a, b) => (a[0]._segmentZ || 0) - (b[0]._segmentZ || 0));
+
+        for (let s = 0; s < snakes.length; s++) {
+            const group = snakes[s];
+            const head = group[0];
+            const hasHead = !!(head && head.serverHead);
+            const pool = this._snakePool || (this._snakePool = []);
+            const scratch = this._snakeScratch || (this._snakeScratch = { x: 0, y: 0, r: 0, alpha: 1 });
+            let count = 0;
+            const take = (x, y, r, alpha, seg) => {
+                let p = pool[count];
+                if (!p) p = pool[count] = { x: 0, y: 0, r: 0, alpha: 1, seg: 0 };
+                p.x = x;
+                p.y = y;
+                p.r = r;
+                p.alpha = alpha;
+                p.seg = seg;
+                count++;
+            };
+            const stampStep = (r) => Math.max(2.5, r * (7 / 14.5));
+            const segOf = (cell, i) => (cell && cell.bodyIndex != null) ? cell.bodyIndex : i;
+            if (group.length < 2) {
+                const h = group[0];
+                take(h.x, h.y, h.r, h.alpha == null ? 1 : h.alpha, segOf(h, 0));
+            } else {
+                const glen = group.length;
+                const at = (i) => group[i < 0 ? 0 : (i >= glen ? glen - 1 : i)];
+                const curve = (i, t, o) => {
+                    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+                    const t2 = t * t;
+                    const t3 = t2 * t;
+                    o.x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+                    o.y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+                    o.r = p1.r + (p2.r - p1.r) * t;
+                    const a1 = p1.alpha == null ? 1 : p1.alpha;
+                    const a2 = p2.alpha == null ? 1 : p2.alpha;
+                    o.alpha = a1 + (a2 - a1) * t;
+                    o.seg = segOf(p1, i) + (segOf(p2, i + 1) - segOf(p1, i)) * t;
+                };
+                curve(0, 0, scratch);
+                let px = scratch.x, py = scratch.y, pr = scratch.r, pa = scratch.alpha, ps = scratch.seg;
+                take(px, py, pr, pa, ps);
+                for (let i = 0; i < glen - 1; i++) {
+                    const tailSpan = i === glen - 2;
+                    for (let s = 1; s <= 4; s++) {
+                        if (tailSpan) {
+                            const p1 = at(i);
+                            const p2 = at(i + 1);
+                            const t = s / 4;
+                            scratch.x = p1.x + (p2.x - p1.x) * t;
+                            scratch.y = p1.y + (p2.y - p1.y) * t;
+                            scratch.r = p1.r + (p2.r - p1.r) * t;
+                            const a1 = p1.alpha == null ? 1 : p1.alpha;
+                            const a2 = p2.alpha == null ? 1 : p2.alpha;
+                            scratch.alpha = a1 + (a2 - a1) * t;
+                            scratch.seg = segOf(p1, i) + (segOf(p2, i + 1) - segOf(p1, i)) * t;
+                        } else {
+                            curve(i, s / 4, scratch);
+                        }
+                        let dx = scratch.x - px;
+                        let dy = scratch.y - py;
+                        let dist = Math.hypot(dx, dy);
+                        let guard = 0;
+                        while (dist >= stampStep((pr + scratch.r) * 0.5) && guard++ < 8) {
+                            const local = stampStep((pr + scratch.r) * 0.5);
+                            const u = local / dist;
+                            px += dx * u;
+                            py += dy * u;
+                            pr += (scratch.r - pr) * u;
+                            pa += (scratch.alpha - pa) * u;
+                            ps += (scratch.seg - ps) * u;
+                            take(px, py, pr, pa, ps);
+                            dx = scratch.x - px;
+                            dy = scratch.y - py;
+                            dist = Math.hypot(dx, dy);
+                        }
+                    }
+                }
+                const tail = at(glen - 1);
+                if (Math.hypot(tail.x - px, tail.y - py) > 1.5) {
+                    take(tail.x, tail.y, tail.r, tail.alpha == null ? 1 : tail.alpha, segOf(tail, glen - 1));
+                }
+            }
+            const samples = pool;
+            const n = count;
+            let angs = this._snakeAng;
+            if (!angs || angs.length < n) this._snakeAng = angs = new Float64Array(Math.max(512, n * 2));
+            for (let j = 1; j < n; j++) {
+                angs[j] = Math.atan2(samples[j].y - samples[j - 1].y, samples[j].x - samples[j - 1].x);
+            }
+            angs[0] = n > 1 ? angs[1] : 0;
+
+            let cv = head.cv | 0;
+            let rbcs = null;
+            let cusk = false;
+            if (head.rbcs && head.rbcs.length) {
+                rbcs = head.rbcs;
+                cusk = true;
+            }
+            if (!rbcs) rbcs = slitherPreset(cv);
+            if (rbcs) cv = rbcs[0];
+            else if (!(cv >= 0 && cv < gfx.colors.length)) cv = SlitherGfx.nearest(head._colorNum >>> 0);
+            const skin = gfx.colors[cv];
+            const scLen = Math.min(6, 1 + Math.max(0, group.length - 2) / 106);
+            const ssp = 4.25 + 0.5 * scLen;
+            const msp = 12;
+            const boosting = !!(head.boostBoosting || (head._isNetworkBoosting && head._isNetworkBoosting()));
+            const dt = Math.min(40, Math.max(0, now - (head._boostT || now)));
+            head._boostT = now;
+            const vfr = dt / 8;
+            const fsp = ssp + 0.1;
+            const targetSp = boosting ? ssp + (msp - ssp) * 0.28 : ssp;
+            if (head._tsp == null) head._tsp = ssp;
+            head._tsp += (targetSp - head._tsp) * (head._tsp < targetSp ? 0.1 : 0.3);
+            if (head._tsp > fsp) head._sfr = (head._sfr || 0) + (head._tsp - fsp) * vfr * 0.021;
+            let boostM = 0, om = 0, mr = 0;
+            if (head._tsp > fsp) {
+                boostM = Math.max(0, Math.min(1, (head._tsp - ssp) / (msp - ssp)));
+                om = boostM * 0.37;
+                mr = Math.sqrt(boostM);
+            }
+            const bodyMul = 1 - boostM;
+            const alive = Math.max(0, Math.min(1, head.alpha));
+            const a = alive * alive;
+
+            const phaseBase = Math.round(((group[0] && group[0].bodyIndex != null) ? group[0].bodyIndex : 0) * (14.5 / 7));
+            const phaseOf = (j) => phaseBase + j;
+            const colorAt = (j) => {
+                if (!rbcs) return skin;
+                const phase = phaseOf(j);
+                const id = rbcs[((phase % rbcs.length) + rbcs.length) % rbcs.length];
+                return gfx.colors[id] || skin;
+            };
+            const frameAt = (j) => {
+                const col = colorAt(j);
+                if (cusk) return col.kmcs[0];
+                const kl = col.kl;
+                const kl2 = kl * 2;
+                const phase = phaseOf(j);
+                let k = col.klp ? (((phase % kl2) + kl2) % kl2) : (((phase % kl) + kl) % kl);
+                if (col.klp && k >= kl) k = kl2 - (k + 1);
+                return col.kmcs[k];
+            };
+            const gap = (j) => {
+                const p = samples[j];
+                const prev = samples[j + 1] || p;
+                let d2 = (Math.abs(p.x - prev.x) + Math.abs(p.y - prev.y)) / 6;
+                return d2 > 1 ? 1 : d2;
+            };
+
+            if (boostM > 0) {
+                ctx.save();
+                ctx.globalCompositeOperation = "lighter";
+                for (let j = n - 1; j >= 0; j--) {
+                    const p = samples[j];
+                    if (!p || !(p.r > 0)) continue;
+                    const half = 1.5 * p.r * (1 + (62 / 32 - 1) * mr);
+                    ctx.globalAlpha = gap(j) * a * mr * 0.38 * (0.6 + 0.4 * Math.cos(j / 4 - 1.15 * (head._sfr || 0)));
+                    ctx.drawImage(colorAt(j).kfmc, p.x - half, p.y - half, half * 2, half * 2);
+                }
+                ctx.restore();
+            }
+
+            const am = a * bodyMul;
+            for (let j = n - 1; j >= 0; j--) {
+                const p = samples[j];
+                if (!p || !(p.r > 0)) continue;
+                const sh = p.r * (62 / 32);
+                const fade = j < 9 ? j / 9 : gap(j);
+                ctx.globalAlpha = am * fade;
+                ctx.drawImage(gfx.shadow, p.x - sh, p.y - sh, sh * 2, sh * 2);
+            }
+            const dpr = this.renderDpr || 1;
+            const cssW = this._viewCssW || innerWidth;
+            const cssH = this._viewCssH || innerHeight;
+            const camS = (this.camera.s || 1) * dpr;
+            const originX = cssW * 0.5 * dpr - this.camera.x * camS;
+            const originY = cssH * 0.5 * dpr - this.camera.y * camS;
+            for (let j = n - 1; j >= 0; j--) {
+                const p = samples[j];
+                if (!p || !(p.r > 0)) continue;
+                const ang = angs[j] || 0;
+                const c = Math.cos(ang);
+                const si = Math.sin(ang);
+                const half = p.r;
+                ctx.globalAlpha = am * (p.alpha == null ? 1 : p.alpha);
+                ctx.setTransform(
+                    camS * c, camS * si,
+                    -camS * si, camS * c,
+                    camS * p.x + originX,
+                    camS * p.y + originY
+                );
+                ctx.drawImage(frameAt(j), -half, -half, half * 2, half * 2);
+            }
+            this._applyCameraTransform(ctx);
+
+            if (boostM > 0) {
+                ctx.save();
+                ctx.globalCompositeOperation = "lighter";
+                for (let j = n - 1; j >= 0; j--) {
+                    const p = samples[j];
+                    if (!p || !(p.r > 0)) continue;
+                    const half = p.r * 2;
+                    ctx.globalAlpha = gap(j) * a * om * (0.5 + 0.5 * Math.cos(j / 4 - (head._sfr || 0)));
+                    ctx.drawImage(colorAt(j).kfmc, p.x - half, p.y - half, half * 2, half * 2);
+                }
+                ctx.restore();
+            }
+
+            if (!hasHead) {
+                ctx.globalAlpha = 1;
+                ctx.globalCompositeOperation = "source-over";
+                continue;
+            }
+
+            const neck = group.length > 1 ? group[1] : null;
+            const face = neck
+                ? Math.atan2(head.y - neck.y, head.x - neck.x)
+                : (angs[0] || 0);
+            const mine = ownerId && head.playerId === ownerId && mouse;
+            const want = mine ? Math.atan2(mouse.y - head.y, mouse.x - head.x) : face;
+            const stepEye = vfr / 6;
+            const wx = Math.cos(want) * 2.3;
+            const wy = Math.sin(want) * 2.3;
+            if (head._rex == null) {
+                head._rex = wx;
+                head._rey = wy;
+                head._ehang = face;
+            } else {
+                if (head._rex < wx) head._rex = Math.min(wx, head._rex + stepEye);
+                else if (head._rex > wx) head._rex = Math.max(wx, head._rex - stepEye);
+                if (head._rey < wy) head._rey = Math.min(wy, head._rey + stepEye);
+                else if (head._rey > wy) head._rey = Math.max(wy, head._rey - stepEye);
+                let d = face - head._ehang;
+                d = Math.atan2(Math.sin(d), Math.cos(d));
+                head._ehang += d * 0.45;
+            }
+            const fang = head._ehang;
+            const esc = head.r / 14.5;
+            const eye = esc * 0.81;
+            const ed = 7.4 * esc;
+            const spread = 5.6 * esc;
+            const er = 6 * eye;
+            const pr = 3.5 * eye;
+            const rex = head._rex * eye;
+            const rey = head._rey * eye;
+            ctx.globalCompositeOperation = "source-over";
+            const smoothPupils = ctx.imageSmoothingEnabled;
+            ctx.globalAlpha = 0.75 * alive;
+            for (let side = -1; side <= 1; side += 2) {
+                const ex = head.x + Math.cos(fang) * ed + Math.cos(fang + side * Math.PI / 2) * spread;
+                const ey = head.y + Math.sin(fang) * ed + Math.sin(fang + side * Math.PI / 2) * spread;
+                ctx.imageSmoothingEnabled = false;
+                SlitherLook.blit(ctx, SlitherLook.eyeEdge, ex, ey, er);
+                ctx.imageSmoothingEnabled = true;
+                SlitherLook.blit(ctx, SlitherLook.eyeCore, ex, ey, er * 0.93);
+            }
+            ctx.globalAlpha = alive;
+            for (let side = -1; side <= 1; side += 2) {
+                const ex = head.x + Math.cos(fang) * (ed + 0.5 * esc) + rex + Math.cos(fang + side * Math.PI / 2) * spread;
+                const ey = head.y + Math.sin(fang) * (ed + 0.5 * esc) + rey + Math.sin(fang + side * Math.PI / 2) * spread;
+                ctx.imageSmoothingEnabled = false;
+                SlitherLook.blit(ctx, SlitherLook.pupilEdge, ex, ey, pr);
+                ctx.imageSmoothingEnabled = true;
+                SlitherLook.blit(ctx, SlitherLook.pupilCore, ex, ey, pr * 0.93);
+            }
+            ctx.imageSmoothingEnabled = smoothPupils;
+            const ownSnake = !!(ownerId && head.playerId === ownerId);
+            let nameFade = 1;
+            if (ownSnake) {
+                const left = (this._ownNameUntil || 0) - now;
+                nameFade = left > 700 ? 1 : (left > 0 ? left / 700 : 0);
+            }
+            if (head._name && nameFade > 0 && (ownSnake || head._showName)) {
+                const rr = skin.rr, gg = skin.gg, bb = skin.bb;
+                const namePx = Math.max(10, head.r * 0.72);
+                ctx.globalAlpha = 0.5 * alive * nameFade * (head.labelAlpha == null ? 1 : head.labelAlpha);
+                ctx.font = `${namePx}px Arial, "Helvetica Neue", Helvetica, sans-serif`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = `rgb(${((255 + rr) * 0.5) | 0},${((255 + gg) * 0.5) | 0},${((255 + bb) * 0.5) | 0})`;
+                ctx.fillText(head._name, head.x, head.y + head.r * 2.05);
+            }
+            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = "source-over";
+        }
+    }
+
     drawWorld() {
         const ctx = this.ctx;
         if (!ctx) return;
@@ -6455,9 +7232,8 @@ class Application {
         }
         for (let i = 0; i < this.dyingCells.length; i++) {
             const cell = this.dyingCells[i];
-            if (!cell || !cell._fadingOut) continue;
-            if (cell.playerId) snakeList.push(cell);
-            else foodList.push(cell);
+            if (!cell || !cell._fadingOut || cell.playerId) continue;
+            foodList.push(cell);
         }
 
         foodList.sort((a, b) => (a._segmentZ || 0) - (b._segmentZ || 0));
@@ -6467,9 +7243,7 @@ class Application {
             foodList[i].draw(ctx);
         }
 
-        for (let i = 0; i < snakeList.length; i++) {
-            snakeList[i].draw(ctx);
-        }
+        this.drawSlitherSnakes(ctx, snakeList, this.now || performance.now());
 
         if (border?.width && this.mapReady && settings?.border !== false) {
             this._paintOutsideAndBorder(ctx, border);
@@ -6999,12 +7773,24 @@ class Network {
         const msg = prepareData(4 + 2 * nick.length);
         let offset = 0;
         msg.setUint8(offset++, 0);
-        msg.setUint8(offset++, 0); // colorId игнорируется сервером
+        const custom = window.__slitherCustom;
+        const picked = Number(localStorage.getItem("slitherSkin"));
+        msg.setUint8(offset++, custom && custom.length ? 0 : (picked >= 0 && picked <= 65 ? picked + 1 : 0));
         for (let i = 0; i < nick.length; i++) {
             msg.setUint16(offset, nick.charCodeAt(i), true);
             offset += 2;
         }
         msg.setUint16(offset, 0, true);
+        if (custom && custom.length) this.sendSkinPattern(custom);
+        this.send(msg);
+    }
+
+    sendSkinPattern(colors) {
+        const n = Math.min(48, colors.length | 0);
+        const msg = prepareData(2 + n);
+        msg.setUint8(0, 24);
+        msg.setUint8(1, n);
+        for (let i = 0; i < n; i++) msg.setUint8(2 + i, colors[i] & 255);
         this.send(msg);
     }
 
@@ -7384,12 +8170,6 @@ class Network {
                     posX = reader.int32();
                     posY = reader.int32();
                     size = reader.uint16();
-                    // Куски после смерти: визуально чуть больше еды карты
-                    if (type === 3) {
-                        const foodMax = this.foodMaxSize || 12;
-                        const cap = foodMax * 1.55 + 2;
-                        if (size > cap) size = cap;
-                    }
                 }
 
                 if (!reader.canRead) break;
@@ -7397,14 +8177,23 @@ class Network {
                 const g = reader.uint8();
                 const b = reader.uint8();
                 if (!reader.canRead) break;
-                reader.uint8();
+                const skinMark = reader.uint8();
                 if (!reader.canRead) break;
                 const name = reader.utf8();
+
+                const cv = type === 0 && skinMark >= 1 && skinMark <= 66 ? skinMark - 1 : -1;
+                let skinPattern = null;
+                if (skinMark === 254 && reader.canRead) {
+                    const pn = reader.uint8();
+                    skinPattern = [];
+                    for (let pi = 0; pi < pn && reader.canRead; pi++) skinPattern.push(reader.uint8());
+                }
+                const bodyIndex = type === 0 && reader.canRead ? reader.uint8() : -1;
+                const serverHead = bodyIndex === 0;
 
                 if (!isValidCellState(posX, posY, size)) {
                     continue;
                 }
-
                 const hex = ((r << 16) | (g << 8) | b);
                 const color = "#" + ("000000" + hex.toString(16)).slice(-6).toUpperCase();
                 // После смерти головы хвост больше не считаем «своим»
@@ -7418,11 +8207,28 @@ class Network {
                         cellsByID.delete(id);
                         this.addCell(id, posX, posY, size, name, color, playerId, type);
                         const fresh = cellsByID.get(id);
-                        if (fresh) applyServerCellState(fresh, posX, posY, size, this.now, true);
+                        if (fresh) {
+                            fresh.cv = cv;
+                            fresh.rbcs = skinPattern;
+                            fresh.bodyIndex = bodyIndex >= 0 ? bodyIndex : null;
+                            fresh.serverHead = serverHead;
+                            fresh.isHead = serverHead;
+                            applyServerCellState(fresh, posX, posY, size, this.now, true);
+                        }
                         continue;
                     }
 
                     if (playerId) cell.setPlayerId(playerId);
+                    if (type === 0) {
+                        cell.cv = cv;
+                        cell.rbcs = skinPattern;
+                        if (bodyIndex >= 0) cell.bodyIndex = bodyIndex;
+                        if (cell.serverHead !== serverHead) {
+                            cell.serverHead = serverHead;
+                            cell.isHead = serverHead;
+                            cell.syncLabelVisibility();
+                        }
+                    }
                     if (type === 3 && !cell.isDeathFood) cell.setAsDeathFood();
                     else if (type === 1 && !cell.isFood) cell.setAsFood();
 
@@ -7453,6 +8259,13 @@ class Network {
                     if (!cell) continue;
 
                     applyServerCellState(cell, posX, posY, size, this.now, true);
+                    if (type === 0) {
+                        cell.cv = cv;
+                        cell.rbcs = skinPattern;
+                        cell.bodyIndex = bodyIndex >= 0 ? bodyIndex : null;
+                        cell.serverHead = serverHead;
+                        cell.isHead = serverHead;
+                    }
                     cell.color = color;
                     cell.name = name;
                     if (type === 1) cell.setAsFood();
@@ -7538,6 +8351,7 @@ class UserInterface {
         this.spectateButton = document.getElementById("spectate")
         this.settingsButton = document.getElementById("settings")
         this.skinsButton = document.getElementById("skins")
+        this._startSkinStage()
         this._skinsPage = 0
         this._skinsModalId = 0
         this.nameInput = document.getElementById("name")
@@ -7906,6 +8720,26 @@ class UserInterface {
         this.playButton.addEventListener("click", this.onPlay)
         this.spectateButton.addEventListener("click", this.onSpectate)
         this.skinsButton?.addEventListener("click", this.onSkins)
+        document.getElementById("skin-prev")?.addEventListener("click", () => this._stepSkin(-1))
+        document.getElementById("skin-next")?.addEventListener("click", () => this._stepSkin(1))
+        document.getElementById("skin-colors")?.addEventListener("click", (e) => {
+            const btn = e.target instanceof Element ? e.target.closest("button") : null;
+            if (!btn) return;
+            const id = Number(btn.getAttribute("data-add-color"));
+            if (!(id >= 0)) return;
+            const slots = 28;
+            if (!window.__skinBuild || window.__skinBuild.length !== slots || this._skinCursor == null) {
+                const preset = this._skinPresetIndex();
+                const saved = window.__slitherCustom;
+                const seq = saved && saved.length ? saved : (slitherPreset(preset) || [preset % 9]);
+                const base = [];
+                for (let i = 0; i < slots; i++) base.push(seq[i % seq.length]);
+                window.__skinBuild = base;
+                this._skinCursor = 0;
+            }
+            window.__skinBuild[this._skinCursor % slots] = id;
+            this._skinCursor++;
+        })
         this.settingsButton.addEventListener("click", this.onSettings)
         document.querySelector(".site-footer")?.addEventListener("click", (e) => {
             const btn = e.target.closest("[data-legal]");
@@ -8097,6 +8931,7 @@ class UserInterface {
 
         const name = (this.nameInput.value || "").trim() || "Игрок";
         this.core.store.name = name;
+        this._saveSkinPick();
         this.scatterMenuClouds();
         this.core.app.exitSpectateMode();
         this.core.app.prepareNewLife();
@@ -8176,6 +9011,7 @@ class UserInterface {
         if (this._lifeActive) return;
         this._lifeActive = true;
         this.core.app.snakeEnded = false;
+        this.core.app._ownNameUntil = performance.now() + 3000;
         this.core.app.refreshHeadCellId();
         this.sessionStats.start();
         this.hideDeathStats();
@@ -8538,7 +9374,253 @@ class UserInterface {
         }
     }
 
+    _skinPresetIndex() {
+        let preset = Number(localStorage.getItem("slitherSkin"));
+        if (!(preset >= 0 && preset <= 65)) preset = 0;
+        return preset;
+    }
+
+    _skinSequence() {
+        const build = window.__skinBuild;
+        if (build && build.length) return build;
+        const saved = window.__slitherCustom;
+        if (saved && saved.length) return saved;
+        const preset = this._skinPresetIndex();
+        return slitherPreset(preset) || [preset % 9];
+    }
+
+    _stepSkin(dir) {
+        window.__skinBuild = [];
+        window.__slitherCustom = null;
+        this._skinCursor = null;
+        localStorage.removeItem("slitherCustom");
+        const preset = (this._skinPresetIndex() + dir + 66) % 66;
+        localStorage.setItem("slitherSkin", String(preset));
+    }
+
+    _saveSkinPick() {
+        const build = window.__skinBuild || [];
+        if (build.length) {
+            localStorage.setItem("slitherCustom", JSON.stringify(build));
+            window.__slitherCustom = build.slice();
+        } else {
+            localStorage.removeItem("slitherCustom");
+            window.__slitherCustom = null;
+            localStorage.setItem("slitherSkin", String(this._skinPresetIndex()));
+        }
+        if (this.core?.net?.sendNickname && this.core.store) {
+            this.core.net.sendNickname(this.core.store.name);
+        }
+    }
+
+    _startSkinStage() {
+        const canvas = document.getElementById("skin-preview");
+        const colors = document.getElementById("skin-colors");
+        if (!canvas || typeof SlitherGfx === "undefined") return;
+        const gfx = SlitherGfx.get();
+        if (colors && !colors.childElementCount) {
+            const picked = [];
+            for (let i = 0; i < Math.min(24, gfx.colors.length); i++) {
+                const c = gfx.colors[i];
+                const same = picked.some((p) => {
+                    const dr = c.rr - p.rr;
+                    const dg = c.gg - p.gg;
+                    const db = c.bb - p.bb;
+                    return dr * dr + dg * dg + db * db < 1400;
+                });
+                if (same) continue;
+                picked.push(c);
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.setAttribute("data-add-color", String(i));
+                btn.style.background = `rgb(${c.rr},${c.gg},${c.bb})`;
+                btn.title = "Добавить цвет";
+                colors.appendChild(btn);
+            }
+        }
+        const ctx = canvas.getContext("2d");
+        let phase = 0;
+        const draw = () => {
+            requestAnimationFrame(draw);
+            if (!document.body.classList.contains("menu-open")) return;
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+            const seq = this._skinSequence();
+            const custom = !!(window.__skinBuild && window.__skinBuild.length);
+            const n = 28;
+            const r = 18;
+            const amp = 26;
+            const yPad = r + 16;
+            phase += 0.032;
+            const pts = [];
+            const inset = w * 0.12;
+            for (let i = 0; i < n; i++) {
+                const t = i / (n - 1);
+                let y = h * 0.5 + Math.sin(t * Math.PI * 1.5 + phase) * amp;
+                if (y < yPad) y = yPad;
+                if (y > h - yPad) y = h - yPad;
+                pts.push({
+                    x: inset + t * (w - inset * 2),
+                    y
+                });
+            }
+            const step = r * (7 / 14.5);
+            for (let i = 0; i < n; i++) {
+                const p = pts[i];
+                const prev = pts[Math.max(0, i - 1)];
+                const next = pts[Math.min(n - 1, i + 1)];
+                const ang = Math.atan2(next.y - prev.y, next.x - prev.x);
+                const fromHead = n - 1 - i;
+                const phaseJ = Math.round(fromHead * step / r * (14.5 / 7));
+                const id = seq[((phaseJ % seq.length) + seq.length) % seq.length] % gfx.colors.length;
+                const col = gfx.colors[id] || gfx.colors[0];
+                let frame = col.kmcs[0];
+                if (!custom && col.kl > 1) {
+                    const kl = col.kl;
+                    const kl2 = kl * 2;
+                    let k = col.klp ? (phaseJ % kl2) : (phaseJ % kl);
+                    if (col.klp && k >= kl) k = kl2 - (k + 1);
+                    frame = col.kmcs[k];
+                }
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(ang);
+                ctx.drawImage(frame, -r, -r, r * 2, r * 2);
+                ctx.restore();
+            }
+            const head = pts[n - 1];
+            const neck = pts[n - 2];
+            const fang = Math.atan2(head.y - neck.y, head.x - neck.x);
+            const esc = r / 14.5;
+            const eye = esc * 0.81;
+            const ed = 7.4 * esc;
+            const spread = 5.6 * esc;
+            const er = 6 * eye;
+            const pr = 3.5 * eye;
+            const smooth = ctx.imageSmoothingEnabled;
+            ctx.globalAlpha = 0.75;
+            for (let side = -1; side <= 1; side += 2) {
+                const ex = head.x + Math.cos(fang) * ed + Math.cos(fang + side * Math.PI / 2) * spread;
+                const ey = head.y + Math.sin(fang) * ed + Math.sin(fang + side * Math.PI / 2) * spread;
+                ctx.imageSmoothingEnabled = false;
+                SlitherLook.blit(ctx, SlitherLook.eyeEdge, ex, ey, er);
+                ctx.imageSmoothingEnabled = true;
+                SlitherLook.blit(ctx, SlitherLook.eyeCore, ex, ey, er * 0.93);
+            }
+            ctx.globalAlpha = 1;
+            for (let side = -1; side <= 1; side += 2) {
+                const ex = head.x + Math.cos(fang) * (ed + 0.5 * esc) + Math.cos(fang + side * Math.PI / 2) * spread;
+                const ey = head.y + Math.sin(fang) * (ed + 0.5 * esc) + Math.sin(fang + side * Math.PI / 2) * spread;
+                ctx.imageSmoothingEnabled = false;
+                SlitherLook.blit(ctx, SlitherLook.pupilEdge, ex, ey, pr);
+                ctx.imageSmoothingEnabled = true;
+                SlitherLook.blit(ctx, SlitherLook.pupilCore, ex, ey, pr * 0.93);
+            }
+            ctx.imageSmoothingEnabled = smooth;
+            ctx.globalAlpha = 1;
+        };
+        requestAnimationFrame(draw);
+    }
+
+    _paintNickSkin() {
+        const img = document.getElementById("nick-skin-img");
+        if (!img || typeof SlitherGfx === "undefined") return;
+        const picked = Number(localStorage.getItem("slitherSkin"));
+        const gfx = SlitherGfx.get();
+        const custom = window.__slitherCustom;
+        const seq = custom && custom.length ? custom : slitherPreset(picked);
+        const cv = seq && seq.length ? seq[0] : (picked >= 0 && picked < gfx.colors.length ? picked : 0);
+        img.src = gfx.colors[cv].kmcs[0].toDataURL();
+    }
+
     onSkins() {
+        const gfx = SlitherGfx.get();
+        if (!Array.isArray(window.__skinBuild)) {
+            try { window.__skinBuild = JSON.parse(localStorage.getItem("slitherCustom") || "[]"); }
+            catch (e) { window.__skinBuild = []; }
+        }
+        let preset = Number(localStorage.getItem("slitherSkin"));
+        if (!(preset >= 0 && preset <= 65)) preset = 0;
+        const colors = gfx.colors.map((skin, i) =>
+            `<button type="button" data-add-color="${i}" style="width:36px;height:36px;padding:0;border:0;background:transparent;cursor:pointer;"><img alt="" src="${skin.kmcs[3] ? skin.kmcs[3].toDataURL() : skin.kmcs[0].toDataURL()}" width="36" height="36"></button>`
+        ).join("");
+        this._skinsModalId = this.modalSystem.addModal(
+            460,
+            null,
+            `<div class="modal-skins">
+              <p class="modal-skins-hint">Стрелки листают готовые узоры. Клик по цвету добавляет его в свой узор, он повторяется вдоль змейки.</p>
+              <div style="display:flex;gap:8px;justify-content:center;align-items:center;margin:8px 0;">
+                <button type="button" data-skin-prev style="width:42px;height:32px;">‹</button>
+                <span data-skin-num style="color:#fff;min-width:88px;text-align:center;"></span>
+                <button type="button" data-skin-next style="width:42px;height:32px;">›</button>
+              </div>
+              <div data-skin-strip style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center;min-height:22px;margin-bottom:8px;"></div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;">${colors}</div>
+              <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;">
+                <button type="button" data-skin-reset>Reset</button>
+                <button type="button" data-skin-save>Save</button>
+              </div>
+            </div>`,
+            { title: "Скин" }
+        );
+        const root = document.querySelector("#modals-container .modal-skins");
+        const paint = () => {
+            if (!root) return;
+            const num = root.querySelector("[data-skin-num]");
+            const strip = root.querySelector("[data-skin-strip]");
+            const build = window.__skinBuild || [];
+            if (num) num.textContent = build.length ? "свой узор" : "узор " + preset;
+            if (!strip) return;
+            const seq = build.length ? build : (slitherPreset(preset) || [preset % 42]);
+            strip.innerHTML = seq.filter((_, i) => i % 4 === 0).map((id) => {
+                const c = gfx.colors[id];
+                return c ? `<img alt="" src="${c.kmcs[0].toDataURL()}" width="16" height="16">` : "";
+            }).join("");
+        };
+        paint();
+        root?.addEventListener("click", (e) => {
+            const t = e.target instanceof Element ? e.target.closest("button") : null;
+            if (!t || !root.contains(t)) return;
+            if (t.hasAttribute("data-add-color")) {
+                const id = Number(t.getAttribute("data-add-color"));
+                const build = window.__skinBuild || (window.__skinBuild = []);
+                for (let n = 0; n < 5 && build.length < 48; n++) build.push(id);
+                paint();
+                return;
+            }
+            if (t.hasAttribute("data-skin-prev") || t.hasAttribute("data-skin-next")) {
+                window.__skinBuild = [];
+                preset = (preset + (t.hasAttribute("data-skin-next") ? 1 : 65)) % 66;
+                localStorage.setItem("slitherSkin", String(preset));
+                localStorage.removeItem("slitherCustom");
+                window.__slitherCustom = null;
+                paint();
+                return;
+            }
+            if (t.hasAttribute("data-skin-reset")) {
+                window.__skinBuild = [];
+                paint();
+                return;
+            }
+            if (t.hasAttribute("data-skin-save")) {
+                const build = window.__skinBuild || [];
+                if (build.length) {
+                    localStorage.setItem("slitherCustom", JSON.stringify(build));
+                    window.__slitherCustom = build.slice();
+                } else {
+                    localStorage.removeItem("slitherCustom");
+                    window.__slitherCustom = null;
+                    localStorage.setItem("slitherSkin", String(preset));
+                }
+                this._paintNickSkin();
+                if (this.core?.net?.sendNickname && this.core.store) {
+                    this.core.net.sendNickname(this.core.store.name);
+                }
+                this.modalSystem.removeModal(this._skinsModalId);
+            }
+        });
+        return;
         const catalog = getSkinCatalog();
         if (!catalog.length) {
             this.modalSystem.addModal(
