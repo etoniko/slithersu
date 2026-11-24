@@ -468,6 +468,26 @@ opacity: .4;
   color: #9a9a9a;
 }
 
+#net-stats {
+  position: absolute;
+  z-index: 10;
+  right: 14px;
+  bottom: 12px;
+  width: 148px;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 10px;
+  font-weight: 500;
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+}
+#net-stats .score-label { opacity: .4; }
+#fps-num { color: #fff; opacity: 1; }
+
 /* Лидерборд — всё видно сразу, без скролла */
 #leaderboard {
   z-index: 45;
@@ -969,7 +989,7 @@ position: fixed;
   width: 148px;
   height: 148px;
   pointer-events: none;
-  bottom: 14px;
+  bottom: 36px;
   right: 14px;
   z-index: 10;
   border-radius: 50%;
@@ -1441,6 +1461,13 @@ body.platform-tv .modal-settings-tile:focus-within {
     box-shadow: none;
     opacity: 1;
   }
+  #net-stats {
+    right: calc(8px + env(safe-area-inset-right, 0px));
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    width: 64px;
+    font-size: 10px;
+    text-align: center;
+  }
 
   #leaderboard {
     top: calc(4px + env(safe-area-inset-top, 0px));
@@ -1472,13 +1499,13 @@ body.platform-tv .modal-settings-tile:focus-within {
     width: 64px;
     height: 64px;
     top: auto;
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(30px + env(safe-area-inset-bottom, 0px));
     right: calc(8px + env(safe-area-inset-right, 0px));
   }
 
   body.mobile-play #minimap-grid {
     top: auto;
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(30px + env(safe-area-inset-bottom, 0px));
     right: calc(8px + env(safe-area-inset-right, 0px));
   }
 }
@@ -1503,12 +1530,14 @@ body.menu-open #score,
 body.menu-open #leaderboard,
 body.menu-open .hud-chat,
 body.menu-open #chat-compose,
-body.menu-open #minimap-grid {
+body.menu-open #minimap-grid,
+body.menu-open #net-stats {
   visibility: hidden !important;
 }
 
 body:not(.hud-live) #score,
-body:not(.hud-live) #leaderboard {
+body:not(.hud-live) #leaderboard,
+body:not(.hud-live) #net-stats {
   visibility: hidden !important;
 }
 
@@ -2891,6 +2920,7 @@ body.platform-tv .modal-settings-tile:focus-within {
   <div id="minimap-grid">
     <canvas id="minimap-view" width="148" height="148" class="hud-minimap"></canvas>
   </div>
+  <div id="net-stats"><span class="score-label">fps:</span> <span id="fps-num">0</span>&nbsp;&nbsp;<span class="score-label">ping:</span> <span id="ping-num">0</span></div>
 
   <canvas id="view"></canvas>
 
@@ -3315,7 +3345,7 @@ function segmentZIndex(segmentIndex, segmentCount, cellNodeId) {
 /** Синхронизация позиции клетки с сервером. */
 
 /** Длительность lerp: чуть длиннее тика сервера → нет «заморозки» между пакетами. */
-const CELL_INTERP_MS = 100;
+const CELL_INTERP_MS = 160;
 function isValidCellCoord(n) {
     return typeof n === "number" && Number.isFinite(n);
 }
@@ -6461,9 +6491,18 @@ class Application {
         this._fpsFrames++;
         const dt = now - this._fpsLast;
         if (dt >= this._fpsUpdateMs) {
-            this.core.stats.fps = (this._fpsFrames * 1000) / dt;
+            const fps = (this._fpsFrames * 1000) / dt;
+            this.core.stats.fps = fps;
             this._fpsFrames = 0;
             this._fpsLast = now;
+            const fpsEl = document.getElementById("fps-num");
+            if (fpsEl) fpsEl.textContent = String(Math.round(fps));
+            const pingEl = document.getElementById("ping-num");
+            if (pingEl) {
+                const ping = Math.max(0, Math.round(this.core.net?.ping || 0));
+                pingEl.textContent = String(ping);
+                pingEl.style.color = ping <= 40 ? "#3dcc6a" : ping <= 80 ? "#f0c040" : "#ff4d4d";
+            }
         }
 
         requestAnimationFrame(this.loop);
