@@ -8,8 +8,10 @@
   <meta name="robots" content="index, follow">
   <title>slither.io</title>
   <script>
-    if ("serviceWorker" in navigator && location.protocol !== "file:") {
-      navigator.serviceWorker.register("./sw.js").catch(function () {});
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (list) {
+        list.forEach(function (reg) { reg.unregister(); });
+      }).catch(function () {});
     }
   </script>
   <link id="favicon" rel="icon" type="image/png" href="./icon.png" />
@@ -2947,12 +2949,15 @@ body.platform-tv .modal-settings-tile:focus-within {
   </script>
   <script>
     (function () {
+      var onYandex = /yandex\.(ru|net|com|by|kz)|ya\.ru/i.test(location.hostname);
+      var ref = "";
+      try { ref = document.referrer || ""; } catch (e) {}
+      var yandexFrame = /yandex\.(ru|net|com|by|kz)|ya\.ru/i.test(ref);
+      if (!onYandex && !yandexFrame) return;
+      window.__wantYandexSdk = true;
       var s = document.createElement("script");
       s.async = true;
-      // На хостинге Яндекс Игр — /sdk.js; локально — CDN для тестов
-      s.src = /yandex\.(ru|net|com|by|kz)|ya\.ru/i.test(location.hostname)
-        ? "/sdk.js"
-        : "https://yandex.ru/games/sdk/v2";
+      s.src = onYandex ? "/sdk.js" : "https://yandex.ru/games/sdk/v2";
       document.head.appendChild(s);
     })();
   </script>
@@ -3778,6 +3783,13 @@ function signalGameReady() {
 }
 async function initYandex() {
     if (ready) return { ysdk, player, deviceType };
+
+    if (!window.__wantYandexSdk) {
+        deviceType = detectLocalDeviceType();
+        applyPlatformClass(deviceType);
+        ready = true;
+        return { ysdk: null, player: null, deviceType };
+    }
 
     const hasSdk = await waitForYaGames(8000);
     if (!hasSdk || typeof YaGames === "undefined") {
@@ -7584,10 +7596,10 @@ class UserInterface {
         this.mobileControls?.syncVisibility();
     }
 
-    /** Пока SDK грузится — блокируем старт (LoadingAPI ещё не ready). */
+    /** Не блокирует «Играть» и «Наблюдать»: сокет открывается только по этим кнопкам. */
     setGameBooting(booting) {
         this._booting = !!booting;
-        const ids = ["play", "spectate", "skins", "settings", "death-play", "death-spectate", "death-revive"];
+        const ids = ["skins", "settings"];
         for (const id of ids) {
             const el = document.getElementById(id);
             if (!el) continue;
@@ -9425,27 +9437,21 @@ class Game {
     this.deviceType = "desktop";
 
     this.defaultServerUrl = SERVER_WS_URL;
-    console.log("Ready — connect on Play:", SERVER_WS_URL);
-
-    // Пока SDK грузится — игра не считается готовой (LoadingAPI)
-    this.ui?.setGameBooting?.(true);
-
-    // Скины грузим параллельно с Yandex SDK — лёгкий txt + bake в память
-    await Promise.all([
-      initYandex(),
-      loadSkinList("./skinlist.txt")
-    ]);
-    this.skins = { ids: listSkinIds() };
-    this.ui?.syncNickSkin?.();
-    applyDebugPlatformOverride();
-    this.deviceType = getDeviceType();
-    this.yandex = getIdentity();
-    this.ui?.onYandexReady?.(this.yandex);
-    this.ui?.onPlatformReady?.(this.deviceType);
     this.ui?.setGameBooting?.(false);
 
-    // Меню уже интерактивно → сигнал готовности платформе
-    signalGameReady();
+    initYandex().then(() => {
+      applyDebugPlatformOverride();
+      this.deviceType = getDeviceType();
+      this.yandex = getIdentity();
+      this.ui?.onYandexReady?.(this.yandex);
+      this.ui?.onPlatformReady?.(this.deviceType);
+      signalGameReady();
+    }).catch((err) => console.warn("[Game] yandex:", err));
+
+    loadSkinList("./skinlist.txt").then(() => {
+      this.skins = { ids: listSkinIds() };
+      this.ui?.syncNickSkin?.();
+    }).catch((err) => console.warn("[Game] skins:", err));
   }
 }
 
