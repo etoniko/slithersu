@@ -5128,13 +5128,6 @@ const SlitherLook = (() => {
     return { nearest, blit, shadow };
 })();
 
-const DEATH_FOOD_HEART = new Image();
-DEATH_FOOD_HEART.src = "./helper_anim.png";
-const DEATH_FOOD_FRAME = 128;
-const DEATH_FOOD_FRAMES = 6;
-const DEATH_FOOD_FRAME_MS = 120;
-
-
 class Cell {
     static NAME_CACHE = new Map();
 
@@ -5547,29 +5540,10 @@ class Cell {
 
         if (this.isFood) {
             if (this.isDeathFood) {
-                if (!this._drawHeart) {
-                    ctx.restore();
-                    return;
-                }
-                const size = r * 3.2;
-                if (DEATH_FOOD_HEART.complete && DEATH_FOOD_HEART.naturalWidth > 0) {
-                    const frame = Math.floor(performance.now() / DEATH_FOOD_FRAME_MS) % DEATH_FOOD_FRAMES;
-                    const sx = frame * DEATH_FOOD_FRAME;
-                    ctx.imageSmoothingEnabled = false;
-                    ctx.drawImage(
-                        DEATH_FOOD_HEART,
-                        sx, 0, DEATH_FOOD_FRAME, DEATH_FOOD_FRAME,
-                        this.x - size / 2,
-                        this.y - size / 2,
-                        size,
-                        size
-                    );
-                } else {
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, r * 1.5, 0, Math.PI * 2);
-                    ctx.fillStyle = "#808080";
-                    ctx.fill();
-                }
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+                ctx.fillStyle = "#808080";
+                ctx.fill();
                 ctx.restore();
                 return;
             }
@@ -6405,27 +6379,6 @@ class Application {
 
         foodList.sort((a, b) => (a._segmentZ || 0) - (b._segmentZ || 0));
         snakeList.sort((a, b) => (a._segmentZ || 0) - (b._segmentZ || 0));
-
-        const hearts = [];
-        for (let i = 0; i < foodList.length; i++) {
-            const cell = foodList[i];
-            cell._drawHeart = false;
-            if (!cell.isDeathFood || ((cell.id >>> 0) & 1) !== 0) continue;
-            hearts.push(cell);
-        }
-        if (hearts.length > 128) {
-            const cx = this.camera.x;
-            const cy = this.camera.y;
-            hearts.sort((a, b) => {
-                const dax = a.x - cx;
-                const day = a.y - cy;
-                const dbx = b.x - cx;
-                const dby = b.y - cy;
-                return (dax * dax + day * day) - (dbx * dbx + dby * dby);
-            });
-            hearts.length = 128;
-        }
-        for (let i = 0; i < hearts.length; i++) hearts[i]._drawHeart = true;
 
         for (let i = 0; i < foodList.length; i++) {
             foodList[i].draw(ctx);
