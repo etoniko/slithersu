@@ -6930,70 +6930,91 @@ class Application {
             } else {
                 const glen = group.length;
                 const at = (i) => group[i < 0 ? 0 : (i >= glen ? glen - 1 : i)];
-                const curve = (i, t, o) => {
+                const turnAt = (p0, p1, p2) => {
+                    const ax = p1.x - p0.x, ay = p1.y - p0.y;
+                    const bx = p2.x - p1.x, by = p2.y - p1.y;
+                    if (ax * ax + ay * ay < 0.25 || bx * bx + by * by < 0.25) return 0;
+                    const d = Math.atan2(by, bx) - Math.atan2(ay, ax);
+                    return Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
+                };
+                // На крутом угле сплайн раздувается и кружки начинают бегать по кольцу.
+                // Там оставляем хорду; на плавном ходе — прежнюю кривую.
+                const linWeight = (i) => {
                     const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
-                    const t2 = t * t;
-                    const t3 = t2 * t;
-                    o.x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
-                    o.y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+                    let sharp = turnAt(p0, p1, p2);
+                    const next = turnAt(p1, p2, p3);
+                    if (next > sharp) sharp = next;
+                    const cell = p1;
+                    let w = cell._linW || 0;
+                    if (i === glen - 2 || sharp >= 1.05) w = 1;
+                    else {
+                        const target = sharp <= 0.4 ? 0 : Math.min(1, (sharp - 0.4) / 0.55);
+                        w += (target - w) * 0.45;
+                    }
+                    cell._linW = w;
+                    return w;
+                };
+                const curve = (i, t, o, linW) => {
+                    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+                    const lx = p1.x + (p2.x - p1.x) * t;
+                    const ly = p1.y + (p2.y - p1.y) * t;
+                    if (linW >= 1) {
+                        o.x = lx;
+                        o.y = ly;
+                    } else {
+                        const t2 = t * t;
+                        const t3 = t2 * t;
+                        let x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+                        let y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+                        if (linW > 0) {
+                            x += (lx - x) * linW;
+                            y += (ly - y) * linW;
+                        }
+                        o.x = x;
+                        o.y = y;
+                    }
                     o.r = p1.r + (p2.r - p1.r) * t;
                     const a1 = p1.alpha == null ? 1 : p1.alpha;
                     const a2 = p2.alpha == null ? 1 : p2.alpha;
                     o.alpha = a1 + (a2 - a1) * t;
                     o.seg = segOf(p1, i) + (segOf(p2, i + 1) - segOf(p1, i)) * t;
                 };
-                curve(0, 0, scratch);
-                let px = scratch.x, py = scratch.y, pr = scratch.r, pa = scratch.alpha, ps = scratch.seg;
-                take(px, py, pr, pa, ps);
-                for (let i = 0; i < glen - 1; i++) {
-                    const tailSpan = i === glen - 2;
-                    for (let s = 1; s <= 4; s++) {
-                        if (tailSpan) {
-                            const p1 = at(i);
-                            const p2 = at(i + 1);
-                            const t = s / 4;
-                            scratch.x = p1.x + (p2.x - p1.x) * t;
-                            scratch.y = p1.y + (p2.y - p1.y) * t;
-                            scratch.r = p1.r + (p2.r - p1.r) * t;
-                            const a1 = p1.alpha == null ? 1 : p1.alpha;
-                            const a2 = p2.alpha == null ? 1 : p2.alpha;
-                            scratch.alpha = a1 + (a2 - a1) * t;
-                            scratch.seg = segOf(p1, i) + (segOf(p2, i + 1) - segOf(p1, i)) * t;
-                        } else {
-                            curve(i, s / 4, scratch);
-                        }
-                        let dx = scratch.x - px;
-                        let dy = scratch.y - py;
-                        let dist = Math.hypot(dx, dy);
-                        let guard = 0;
-                        while (dist >= stampStep((pr + scratch.r) * 0.5) && guard++ < 8) {
-                            const local = stampStep((pr + scratch.r) * 0.5);
-                            const u = local / dist;
-                            px += dx * u;
-                            py += dy * u;
-                            pr += (scratch.r - pr) * u;
-                            pa += (scratch.alpha - pa) * u;
-                            ps += (scratch.seg - ps) * u;
-                            take(px, py, pr, pa, ps);
-                            dx = scratch.x - px;
-                            dy = scratch.y - py;
-                            dist = Math.hypot(dx, dy);
-                        }
+                for (let i = 0; i < glen; i++) {
+                    const p = at(i);
+                    take(p.x, p.y, p.r, p.alpha == null ? 1 : p.alpha, segOf(p, i));
+                    if (i === glen - 1) break;
+                    const p2 = at(i + 1);
+                    const chord = Math.hypot(p2.x - p.x, p2.y - p.y);
+                    const step = stampStep(((p.r || 0) + (p2.r || 0)) * 0.5);
+                    const ideal = chord / step;
+                    let intervals = p._visN;
+                    if (intervals == null || !isFinite(intervals)) intervals = Math.max(1, Math.round(ideal));
+                    else if (Math.abs(ideal - intervals) > 3) intervals = Math.max(1, Math.round(ideal));
+                    else if (ideal > intervals + 0.65) intervals += 1;
+                    else if (ideal < intervals - 0.65) intervals -= 1;
+                    if (intervals < 1) intervals = 1;
+                    else if (intervals > 8) intervals = 8;
+                    p._visN = intervals;
+                    if (intervals < 2) continue;
+                    const w = linWeight(i);
+                    for (let k = 1; k < intervals; k++) {
+                        curve(i, k / intervals, scratch, w);
+                        take(scratch.x, scratch.y, scratch.r, scratch.alpha, scratch.seg);
                     }
-                }
-                const tail = at(glen - 1);
-                if (Math.hypot(tail.x - px, tail.y - py) > 1.5) {
-                    take(tail.x, tail.y, tail.r, tail.alpha == null ? 1 : tail.alpha, segOf(tail, glen - 1));
                 }
             }
             const samples = pool;
             const n = count;
             let angs = this._snakeAng;
             if (!angs || angs.length < n) this._snakeAng = angs = new Float64Array(Math.max(512, n * 2));
+            angs[0] = 0;
             for (let j = 1; j < n; j++) {
-                angs[j] = Math.atan2(samples[j].y - samples[j - 1].y, samples[j].x - samples[j - 1].x);
+                const dx = samples[j].x - samples[j - 1].x;
+                const dy = samples[j].y - samples[j - 1].y;
+                // Соседние кружки на кольце почти совпадают — угол не переворачиваем
+                angs[j] = (dx * dx + dy * dy > 0.64) ? Math.atan2(dy, dx) : angs[j - 1];
             }
-            angs[0] = n > 1 ? angs[1] : 0;
+            if (n > 1) angs[0] = angs[1];
 
             let cv = head.cv | 0;
             let rbcs = null;
@@ -7028,8 +7049,11 @@ class Application {
             const alive = Math.max(0, Math.min(1, head.alpha));
             const a = alive * alive;
 
-            const phaseBase = Math.round(((group[0] && group[0].bodyIndex != null) ? group[0].bodyIndex : 0) * (14.5 / 7));
-            const phaseOf = (j) => phaseBase + j;
+            const phaseOf = (j) => {
+                const p = samples[j];
+                if (!p || p.seg == null) return j;
+                return Math.round(p.seg * (14.5 / 7));
+            };
             const colorAt = (j) => {
                 if (!rbcs) return skin;
                 const phase = phaseOf(j);
